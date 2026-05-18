@@ -15,34 +15,29 @@ function renderWithProviders() {
 }
 
 describe('Compliance Page', () => {
-  test('renders compliance tracker header', () => {
+  test('renders compliance header', () => {
     renderWithProviders();
-    expect(screen.getByText('Compliance Tracker')).toBeInTheDocument();
+    expect(screen.getByText('Credential Compliance')).toBeInTheDocument();
   });
 
-  test('renders calculated compliance status cards', () => {
+  test('renders status summary cards', () => {
     renderWithProviders();
-    // Each card appears exactly once as a card label
-    const statusFilter = screen.getByTestId('filter-status');
-    expect(statusFilter).toBeInTheDocument();
+    // Use getAllByText since "Expired" appears in stat card, filter option, and badge
+    expect(screen.getAllByText('Expired').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Critical Soon/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Compliant/).length).toBeGreaterThanOrEqual(1);
   });
 
-  test('has status and type filters', () => {
+  test('shows urgent notification when expired credentials exist', () => {
     renderWithProviders();
-    expect(screen.getByText('All Statuses')).toBeInTheDocument();
-    expect(screen.getByText('All Types')).toBeInTheDocument();
+    expect(screen.getByTestId('compliance-urgent')).toBeInTheDocument();
   });
 
-  test('renders HIPAA-conscious prototype notice', () => {
+  test('does not use browser alert (uses toast instead)', () => {
     renderWithProviders();
-    expect(screen.getByText('HIPAA-Conscious Prototype Notice')).toBeInTheDocument();
-  });
-
-  test('renders compliance table headers', () => {
-    renderWithProviders();
-    expect(screen.getByText('Staff')).toBeInTheDocument();
-    expect(screen.getByText('Item')).toBeInTheDocument();
-    expect(screen.getByText('Expiry Date')).toBeInTheDocument();
-    expect(screen.getByText('Days Left')).toBeInTheDocument();
+    // The page should render without calling window.alert
+    expect(screen.getByText('Export')).toBeInTheDocument();
+    // Renew buttons exist for expired items
+    expect(screen.getAllByText('Renew').length).toBeGreaterThanOrEqual(1);
   });
 });

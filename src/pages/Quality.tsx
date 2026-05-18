@@ -1,358 +1,357 @@
 import { useAppState } from '../context/AppContext';
-import type { QualityStatus } from '../types';
 import { useState } from 'react';
+import { calculateQAOFromOASIS, calculateQualityRiskScore } from '../utils/dataLogic';
+import { getDaysUntilExpiry, formatDate } from '../lib/dateUtils';
+import type { QualityItem, OASISAssessment, HOPEAssessment } from '../types';
 import {
-  Star, AlertTriangle, Clock, CheckCircle, XCircle, BarChart3,
-  FileText, Heart, Activity, UserCheck, CalendarClock
+  Star, Activity,
+  FileText, Eye, BarChart3, Shield
 } from 'lucide-react';
 
-export default function Quality() {
-  const { state, updateQualityStatus, addAuditEntry, updateOASIS, updateHOPE } = useAppState();
-  const [filterCategory, setFilterCategory] = useState<string>('All');
-  const [filterPriority, setFilterPriority] = useState('All');
-  const [filterStatus, setFilterStatus] = useState('All');
-  const [activeTab, setActiveTab] = useState<'watchboard' | 'oasis' | 'hope'>('watchboard');
+type QualityTab = 'watchboard' | 'oasis' | 'hope' | 'cahps';
 
-  const categories: string[] = ['All', 'Home Health', 'Hospice', 'General QA'];
-  const priorities = ['All', 'High', 'Medium', 'Low'];
-  const statuses = ['All', 'Open', 'In Progress', 'Complete'];
+function Watchboard() {
+  const { state, updateQualityStatus, addAuditEntry, addToast } = useAppState();
+  const riskScore = calculateQualityRiskScore(state.quality, state.oasisAssessments, state.hopeAssessments, state.visits);
+  const [filterType, setFilterType] = useState('All');
 
-  const filtered = state.quality.filter(item =>
-    (filterCategory === 'All' || item.category === filterCategory) &&
-    (filterPriority === 'All' || item.priority === filterPriority) &&
-    (filterStatus === 'All' || item.status === filterStatus)
-  );
+  const types = ['All', ...new Set(state.quality.map(q => q.type))];
+  const filtered = state.quality.filter(q => filterType === 'All' || q.type === filterType);
 
-  const counts = {
-    open: state.quality.filter(i => i.status === 'Open').length,
-    inProgress: state.quality.filter(i => i.status === 'In Progress').length,
-    complete: state.quality.filter(i => i.status === 'Complete').length,
-  };
-
-  // QAO compliance %
-  const totalItems = state.quality.length;
-  const completeItems = state.quality.filter(i => i.status === 'Complete').length;
-  const qaoCompliancePct = totalItems > 0 ? Math.round((completeItems / totalItems) * 100) : 0;
-
-  const handleStatusChange = (id: string, newStatus: string) => {
-    updateQualityStatus(id, newStatus as QualityStatus);
+  const handleStatusChange = (id: string, status: QualityItem['status']) => {
     const item = state.quality.find(q => q.id === id);
+    updateQualityStatus(id, status);
     addAuditEntry({
       user: state.currentUser.name,
       role: state.currentUser.role,
       action: 'Updated',
       recordType: 'Quality',
       recordId: id,
-      details: `Status changed to ${newStatus} for ${item?.patientInitials} - ${item?.type}`,
-      before: item?.status,
-      after: newStatus,
+      details: `Quality item ${item?.patientInitials} status → ${status}`,
     });
+    addToast(`Quality item updated to ${status}`, 'success');
   };
-
-  const highPriorityOpen = state.quality.filter(q => q.priority === 'High' && q.status !== 'Complete');
-
-  // Late assessment alerts
-  const today = new Date();
-  const lateOASIS = state.oasisAssessments.filter(o => o.status === 'Due' && new Date(o.dueDate) < today);
-  const lateHOPE = state.hopeAssessments.filter(h => h.status === 'Due' && new Date(h.dueDate) < today);
-
-  // HHCAHPS follow-ups
-  const hhcahpsItems = state.quality.filter(q => q.type === 'CAHPS Follow-up');
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="page-title flex items-center gap-2">
-          <Star size={22} className="text-advisa-accent" />
-          Quality / OASIS / Hospice Watchboard
-        </h2>
-        <p className="text-xs text-slate-400 mt-1">{state.quality.length} items · {counts.open} open · QAO {qaoCompliancePct}% compliant</p>
+      {/* Quality Risk Score */}
+      <div className={`p-4 rounded-lg border mb-5 ${riskScore > 50 ? 'bg-red-50 border-red-200' : riskScore > 25 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`} data-testid="quality-risk-score">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Shield size={15} /> Quality Risk Score
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              Based on: overdue OASIS, rejected OASIS, late notes, missed visits, unresolved incidents, HOPE overdue
+            </p>
+          </div>
+          <div className={`text-3xl font-bold ${riskScore > 50 ? 'text-red-600' : riskScore > 25 ? 'text-amber-600' : 'text-emerald-600'}`}>
+            {riskScore}%
+          </div>
+        </div>
       </div>
 
-      {/* Late Assessment Alerts */}
-      {(lateOASIS.length > 0 || lateHOPE.length > 0) && (
-        <div className="mb-5 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-xs font-semibold text-red-800 flex items-center gap-2 mb-1">
-            <AlertTriangle size={13} /> Late Assessment Risk
-          </p>
-          {lateOASIS.length > 0 && (
-            <p className="text-xs text-red-700">{lateOASIS.length} OASIS assessment{lateOASIS.length > 1 ? 's' : ''} overdue</p>
-          )}
-          {lateHOPE.length > 0 && (
-            <p className="text-xs text-red-700">{lateHOPE.length} HOPE assessment{lateHOPE.length > 1 ? 's' : ''} overdue</p>
-          )}
-        </div>
-      )}
-
-      {highPriorityOpen.length > 0 && (
-        <div className="mb-5 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-xs text-red-700 font-medium">
-          <AlertTriangle size={14} />
-          {highPriorityOpen.length} high priority items need attention
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex gap-1 mb-5 border-b border-advisa-border">
-        <button onClick={() => setActiveTab('watchboard')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'watchboard' ? 'border-advisa-accent text-advisa-accent' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-          <Activity size={13} className="inline mr-1.5" /> Watchboard
-        </button>
-        <button onClick={() => setActiveTab('oasis')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'oasis' ? 'border-advisa-accent text-advisa-accent' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-          <FileText size={13} className="inline mr-1.5" /> OASIS Queue
-        </button>
-        <button onClick={() => setActiveTab('hope')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'hope' ? 'border-advisa-accent text-advisa-accent' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-          <Heart size={13} className="inline mr-1.5" /> Hospice HOPE
-        </button>
+      {/* Filters */}
+      <div className="flex gap-3 mb-4">
+        <select className="select" value={filterType} onChange={e => setFilterType(e.target.value)}>
+          {types.map(t => <option key={t} value={t}>{t === 'All' ? 'All Types' : t}</option>)}
+        </select>
       </div>
 
-      {activeTab === 'watchboard' && (
-        <>
-          {/* Stat Cards */}
-          <div className="grid grid-cols-4 gap-4 mb-5">
-            <div className="stat-card" style={{ borderLeftWidth: '3px', borderLeftColor: '#dc2626' }}>
-              <div className="flex items-center gap-2 mb-1"><XCircle size={15} className="text-red-600" /><p className="stat-label">Open</p></div>
-              <p className="stat-value text-red-600">{counts.open}</p>
-            </div>
-            <div className="stat-card" style={{ borderLeftWidth: '3px', borderLeftColor: '#d97706' }}>
-              <div className="flex items-center gap-2 mb-1"><Clock size={15} className="text-amber-600" /><p className="stat-label">In Progress</p></div>
-              <p className="stat-value text-amber-600">{counts.inProgress}</p>
-            </div>
-            <div className="stat-card" style={{ borderLeftWidth: '3px', borderLeftColor: '#059669' }}>
-              <div className="flex items-center gap-2 mb-1"><CheckCircle size={15} className="text-emerald-600" /><p className="stat-label">Complete</p></div>
-              <p className="stat-value text-emerald-600">{counts.complete}</p>
-            </div>
-            <div className="stat-card" style={{ borderLeftWidth: '3px', borderLeftColor: '#0ea5e9' }}>
-              <div className="flex items-center gap-2 mb-1"><BarChart3 size={15} className="text-sky-600" /><p className="stat-label">QAO %</p></div>
-              <p className="stat-value text-sky-600">{qaoCompliancePct}%</p>
-            </div>
-          </div>
-
-          {/* Category Sections */}
-          <div className="flex gap-3 mb-5 flex-wrap">
-            <select className="select" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
-              {categories.map(c => <option key={c} value={c}>{c === 'All' ? 'All Categories' : c}</option>)}
-            </select>
-            <select className="select" value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
-              {priorities.map(p => <option key={p} value={p}>{p === 'All' ? 'All Priorities' : p}</option>)}
-            </select>
-            <select className="select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-              {statuses.map(s => <option key={s} value={s}>{s === 'All' ? 'All Statuses' : s}</option>)}
-            </select>
-          </div>
-
-          {/* Quality Table */}
-          <div className="card p-0 overflow-hidden mb-5">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  <th className="table-head">Category</th>
-                  <th className="table-head">Type</th>
-                  <th className="table-head">Patient</th>
-                  <th className="table-head">Priority</th>
-                  <th className="table-head">Due Date</th>
-                  <th className="table-head">Assigned To</th>
-                  <th className="table-head">Reviewer</th>
-                  <th className="table-head">Status</th>
+      {/* Quality Items Table */}
+      <div className="card p-0 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              <th className="table-head">Type</th>
+              <th className="table-head">Patient</th>
+              <th className="table-head">Due Date</th>
+              <th className="table-head">Priority</th>
+              <th className="table-head">Assigned To</th>
+              <th className="table-head">Reviewer</th>
+              <th className="table-head">Status</th>
+              <th className="table-head">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(q => {
+              const overdue = getDaysUntilExpiry(q.dueDate) < 0;
+              return (
+                <tr key={q.id} className={`hover:bg-slate-50 ${overdue && q.status !== 'Complete' ? 'bg-red-50/50' : ''}`}>
+                  <td className="table-cell"><span className="badge badge-info text-[10px]">{q.type}</span></td>
+                  <td className="table-cell font-semibold">{q.patientInitials}</td>
+                  <td className="table-cell">
+                    <span className={overdue && q.status !== 'Complete' ? 'text-red-600 font-medium' : 'text-slate-500'}>{formatDate(q.dueDate)}</span>
+                  </td>
+                  <td className="table-cell">
+                    <span className={`badge text-[10px] ${q.priority === 'High' ? 'badge-urgent' : q.priority === 'Medium' ? 'badge-warning' : 'badge-neutral'}`}>{q.priority}</span>
+                  </td>
+                  <td className="table-cell text-xs">{q.assignedTo}</td>
+                  <td className="table-cell text-xs text-slate-400">{q.reviewerName || '—'}</td>
+                  <td className="table-cell">
+                    <select
+                      value={q.status}
+                      onChange={e => handleStatusChange(q.id, e.target.value as QualityItem['status'])}
+                      className="text-xs px-2 py-1 border border-advisa-border rounded-md bg-white"
+                    >
+                      <option value="Open">Open</option>
+                      <option value="In Progress">In Progress</option>
+                      <option value="Complete">Complete</option>
+                    </select>
+                  </td>
+                  <td className="table-cell">
+                    <button className="text-advisa-accent hover:text-advisa-accent-dark"><Eye size={14} /></button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filtered.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="table-cell">
-                      <span className={`badge text-[10px] ${item.category === 'Home Health' ? 'badge-info' : item.category === 'Hospice' ? 'bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200' : 'badge-neutral'}`}>
-                        {item.category}
-                      </span>
-                    </td>
-                    <td className="table-cell font-semibold text-slate-800">{item.type}</td>
-                    <td className="table-cell">{item.patientInitials}</td>
-                    <td className="table-cell">
-                      <span className={`badge ${item.priority === 'High' ? 'badge-urgent' : item.priority === 'Medium' ? 'badge-warning' : 'badge-success'}`}>
-                        {item.priority}
-                      </span>
-                    </td>
-                    <td className="table-cell text-slate-500">{item.dueDate}</td>
-                    <td className="table-cell text-slate-600">{item.assignedTo}</td>
-                    <td className="table-cell text-slate-400 text-xs">
-                      {item.reviewerName ? (
-                        <span className="flex items-center gap-1"><UserCheck size={10} /> {item.reviewerName}</span>
-                      ) : '—'}
-                      {item.reviewDueDate && <p className="text-[10px] text-slate-300">Due: {item.reviewDueDate}</p>}
-                    </td>
-                    <td className="table-cell">
-                      <select value={item.status} onChange={(e) => handleStatusChange(item.id, e.target.value)}
-                        className="text-xs px-2 py-1 border border-advisa-border rounded-md bg-white">
-                        <option>Open</option><option>In Progress</option><option>Complete</option>
-                      </select>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              );
+            })}
+          </tbody>
+        </table>
+        {filtered.length === 0 && <div className="text-center py-8 text-slate-400 text-sm">No quality items</div>}
+      </div>
+    </div>
+  );
+}
 
-          {/* HHCAHPS Follow-up Tracker */}
-          {hhcahpsItems.length > 0 && (
-            <div className="card mb-5">
-              <div className="card-header"><Star size={15} /> HHCAHPS Follow-up Tracker</div>
-              <div className="space-y-2 text-sm">
-                {hhcahpsItems.map(item => (
-                  <div key={item.id} className="flex justify-between items-center">
-                    <span className="text-slate-600">{item.patientInitials} — Due {item.dueDate}</span>
-                    <span className={`badge ${item.status === 'Complete' ? 'badge-success' : item.status === 'In Progress' ? 'badge-warning' : 'badge-urgent'}`}>
-                      {item.status}
+function OASISQueue() {
+  const { state, updateOASIS, addAuditEntry, addToast } = useAppState();
+  const qao = calculateQAOFromOASIS(state.oasisAssessments);
+
+  const handleStatusChange = (id: string, status: OASISAssessment['status']) => {
+    updateOASIS(id, { status });
+    const item = state.oasisAssessments.find(o => o.id === id);
+    addAuditEntry({
+      user: state.currentUser.name,
+      role: state.currentUser.role,
+      action: 'Updated',
+      recordType: 'OASIS',
+      recordId: id,
+      details: `OASIS ${item?.patientInitials} ${item?.type} → ${status}`,
+    });
+    addToast(`OASIS status updated to ${status}`, 'success');
+  };
+
+  return (
+    <div>
+      {/* QAO Summary */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5" data-testid="qao-summary">
+        <div className="stat-card">
+          <p className="stat-label">Eligible</p>
+          <p className="stat-value text-sky-600">{qao.eligible}</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-label">Accepted</p>
+          <p className="stat-value text-emerald-600">{qao.accepted}</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-label">Submitted</p>
+          <p className="stat-value text-amber-600">{qao.submitted}</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-label">Rejected</p>
+          <p className="stat-value text-red-600">{qao.rejected}</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-label">QAO %</p>
+          <p className={`stat-value ${qao.qaoPct >= 70 ? 'text-emerald-600' : qao.qaoPct >= 50 ? 'text-amber-600' : 'text-red-600'}`}>{qao.qaoPct}%</p>
+        </div>
+      </div>
+
+      {/* OASIS Table */}
+      <div className="card p-0 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              <th className="table-head">Patient</th>
+              <th className="table-head">Type</th>
+              <th className="table-head">Due Date</th>
+              <th className="table-head">Days Left</th>
+              <th className="table-head">Assigned To</th>
+              <th className="table-head">Status</th>
+              <th className="table-head">Rejection Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.oasisAssessments.map(o => {
+              const daysLeft = getDaysUntilExpiry(o.dueDate);
+              return (
+                <tr key={o.id} className={`hover:bg-slate-50 ${daysLeft < 0 && o.status === 'Due' ? 'bg-red-50/50' : ''}`}>
+                  <td className="table-cell font-semibold">{o.patientInitials}</td>
+                  <td className="table-cell"><span className="badge badge-info text-[10px]">{o.type}</span></td>
+                  <td className="table-cell text-slate-500">{formatDate(o.dueDate)}</td>
+                  <td className="table-cell">
+                    <span className={`font-medium ${daysLeft < 0 ? 'text-red-600' : daysLeft <= 3 ? 'text-amber-600' : 'text-slate-500'}`}>
+                      {daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : `${daysLeft}d`}
                     </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Breakdown Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div className="card">
-              <div className="card-header"><BarChart3 size={15} />Breakdown by Type</div>
-              <div className="space-y-2 text-sm">
-                {['OASIS Due', 'QA Review', 'Readmission Follow-up', 'CAHPS Follow-up', 'Hospice Comfort', 'Missed Visit', 'Late Note', 'Incident'].map(type => {
-                  const count = state.quality.filter(q => q.type === type && q.status !== 'Complete').length;
-                  return (
-                    <div key={type} className="flex justify-between items-center">
-                      <span className="text-slate-600">{type}</span>
-                      <span className={`font-semibold text-xs ${count > 0 ? 'text-red-600' : 'text-slate-300'}`}>{count}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="card">
-              <div className="card-header"><AlertTriangle size={15} />Open by Priority</div>
-              <div className="space-y-2 text-sm">
-                {['High', 'Medium', 'Low'].map(priority => {
-                  const count = state.quality.filter(q => q.priority === priority && q.status !== 'Complete').length;
-                  return (
-                    <div key={priority} className="flex justify-between items-center">
-                      <span className={priority === 'High' ? 'text-red-600 font-medium' : priority === 'Medium' ? 'text-amber-600' : 'text-slate-600'}>{priority}</span>
-                      <span className="font-semibold text-xs">{count}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {activeTab === 'oasis' && (
-        <div>
-          <p className="section-title mb-3 flex items-center gap-2"><FileText size={13} /> OASIS Assessment Queue</p>
-          <div className="card p-0 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  <th className="table-head">Patient</th>
-                  <th className="table-head">Type</th>
-                  <th className="table-head">Due Date</th>
-                  <th className="table-head">Assigned To</th>
-                  <th className="table-head">Status</th>
+                  </td>
+                  <td className="table-cell text-xs">{o.assignedTo}</td>
+                  <td className="table-cell">
+                    <select
+                      value={o.status}
+                      onChange={e => handleStatusChange(o.id, e.target.value as OASISAssessment['status'])}
+                      className="text-xs px-2 py-1 border border-advisa-border rounded-md bg-white"
+                    >
+                      <option value="Due">Due</option>
+                      <option value="Submitted">Submitted</option>
+                      <option value="Accepted">Accepted</option>
+                      <option value="Rejected">Rejected</option>
+                    </select>
+                  </td>
+                  <td className="table-cell text-xs text-red-500">{o.rejectionReason || '—'}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {state.oasisAssessments.map(oa => (
-                  <tr key={oa.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="table-cell font-semibold text-slate-800">{oa.patientInitials}</td>
-                    <td className="table-cell">{oa.type}</td>
-                    <td className="table-cell text-slate-500">{oa.dueDate}</td>
-                    <td className="table-cell text-slate-600">{oa.assignedTo}</td>
-                    <td className="table-cell">
-                      <select
-                        value={oa.status}
-                        onChange={e => {
-                          updateOASIS(oa.id, { status: e.target.value as typeof oa.status });
-                          addAuditEntry({ user: state.currentUser.name, role: state.currentUser.role, action: 'Updated', recordType: 'Quality', recordId: oa.id, details: `OASIS ${oa.type} status → ${e.target.value}`, before: oa.status, after: e.target.value });
-                        }}
-                        className="text-xs px-2 py-1 border border-advisa-border rounded-md bg-white"
-                      >
-                        <option>Due</option><option>Submitted</option><option>Accepted</option><option>Rejected</option>
-                      </select>
-                      {oa.rejectionReason && (
-                        <p className="text-[10px] text-red-500 mt-0.5">{oa.rejectionReason}</p>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function HOPEQueue() {
+  const { state, updateHOPE, addAuditEntry, addToast } = useAppState();
+
+  const handleStatusChange = (id: string, status: HOPEAssessment['status']) => {
+    updateHOPE(id, { status });
+    addAuditEntry({
+      user: state.currentUser.name,
+      role: state.currentUser.role,
+      action: 'Updated',
+      recordType: 'HOPE',
+      recordId: id,
+      details: `HOPE assessment status → ${status}`,
+    });
+    addToast(`HOPE status updated to ${status}`, 'success');
+  };
+
+  return (
+    <div>
+      <div className="card p-0 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              <th className="table-head">Patient</th>
+              <th className="table-head">Type</th>
+              <th className="table-head">Due Date</th>
+              <th className="table-head">Days Left</th>
+              <th className="table-head">Assigned To</th>
+              <th className="table-head">Status</th>
+              <th className="table-head">iQIES Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.hopeAssessments.map(h => {
+              const daysLeft = getDaysUntilExpiry(h.dueDate);
+              return (
+                <tr key={h.id} className={`hover:bg-slate-50 ${daysLeft < 0 && h.status === 'Due' ? 'bg-red-50/50' : ''}`}>
+                  <td className="table-cell font-semibold">{h.patientInitials}</td>
+                  <td className="table-cell"><span className="badge badge-info text-[10px]">{h.type}</span></td>
+                  <td className="table-cell text-slate-500">{formatDate(h.dueDate)}</td>
+                  <td className="table-cell">
+                    <span className={`font-medium ${daysLeft < 0 ? 'text-red-600' : daysLeft <= 3 ? 'text-amber-600' : 'text-slate-500'}`}>
+                      {daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : `${daysLeft}d`}
+                    </span>
+                  </td>
+                  <td className="table-cell text-xs">{h.assignedTo}</td>
+                  <td className="table-cell">
+                    <select
+                      value={h.status}
+                      onChange={e => handleStatusChange(h.id, e.target.value as HOPEAssessment['status'])}
+                      className="text-xs px-2 py-1 border border-advisa-border rounded-md bg-white"
+                    >
+                      <option value="Due">Due</option>
+                      <option value="Submitted">Submitted</option>
+                      <option value="Accepted">Accepted</option>
+                      <option value="Rejected">Rejected</option>
+                    </select>
+                  </td>
+                  <td className="table-cell">
+                    <span className={`badge text-[10px] ${h.iqiesStatus === 'Accepted' ? 'badge-success' : h.iqiesStatus === 'Error' ? 'badge-urgent' : 'badge-warning'}`}>
+                      {h.iqiesStatus}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function CAHPSTab() {
+  const { state } = useAppState();
+  const cahpsItems = state.quality.filter(q => q.type === 'CAHPS Follow-up');
+
+  return (
+    <div>
+      {cahpsItems.length === 0 ? (
+        <p className="text-sm text-slate-400 text-center py-8">No CAHPS follow-up items</p>
+      ) : (
+        <div className="card p-0 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr>
+                <th className="table-head">Patient</th>
+                <th className="table-head">Due Date</th>
+                <th className="table-head">Assigned To</th>
+                <th className="table-head">Priority</th>
+                <th className="table-head">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cahpsItems.map(q => (
+                <tr key={q.id} className="hover:bg-slate-50">
+                  <td className="table-cell font-semibold">{q.patientInitials}</td>
+                  <td className="table-cell text-slate-500">{formatDate(q.dueDate)}</td>
+                  <td className="table-cell text-xs">{q.assignedTo}</td>
+                  <td className="table-cell"><span className={`badge text-[10px] ${q.priority === 'High' ? 'badge-urgent' : q.priority === 'Medium' ? 'badge-warning' : 'badge-neutral'}`}>{q.priority}</span></td>
+                  <td className="table-cell"><span className={`badge text-[10px] ${q.status === 'Complete' ? 'badge-success' : 'badge-warning'}`}>{q.status}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
+    </div>
+  );
+}
 
-      {activeTab === 'hope' && (
-        <div>
-          <p className="section-title mb-3 flex items-center gap-2"><Heart size={13} /> Hospice HOPE Assessment Tracker</p>
-          <div className="card p-0 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  <th className="table-head">Patient</th>
-                  <th className="table-head">Type</th>
-                  <th className="table-head">Due Date</th>
-                  <th className="table-head">Assigned To</th>
-                  <th className="table-head">Status</th>
-                  <th className="table-head">iQIES</th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.hopeAssessments.map(ha => (
-                  <tr key={ha.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="table-cell font-semibold text-slate-800">{ha.patientInitials}</td>
-                    <td className="table-cell">{ha.type}</td>
-                    <td className="table-cell text-slate-500">{ha.dueDate}</td>
-                    <td className="table-cell text-slate-600">{ha.assignedTo}</td>
-                    <td className="table-cell">
-                      <select
-                        value={ha.status}
-                        onChange={e => {
-                          updateHOPE(ha.id, { status: e.target.value as typeof ha.status });
-                          addAuditEntry({ user: state.currentUser.name, role: state.currentUser.role, action: 'Updated', recordType: 'Quality', recordId: ha.id, details: `HOPE ${ha.type} status → ${e.target.value}`, before: ha.status, after: e.target.value });
-                        }}
-                        className="text-xs px-2 py-1 border border-advisa-border rounded-md bg-white"
-                      >
-                        <option>Due</option><option>Submitted</option><option>Accepted</option><option>Rejected</option>
-                      </select>
-                    </td>
-                    <td className="table-cell">
-                      <span className={`badge ${ha.iqiesStatus === 'Accepted' ? 'badge-success' : ha.iqiesStatus === 'Error' ? 'badge-urgent' : ha.iqiesStatus === 'Submitted' ? 'badge-info' : 'badge-neutral'}`}>
-                        {ha.iqiesStatus}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+export default function Quality() {
+  const [activeTab, setActiveTab] = useState<QualityTab>('watchboard');
 
-          {/* HOPE Timeline */}
-          <div className="mt-5 card">
-            <div className="card-header"><CalendarClock size={15} /> HOPE Assessment Timeline</div>
-            <div className="space-y-3">
-              {['HOPE Admission', 'HOPE Update Visit 1', 'HOPE Update Visit 2', 'HOPE Discharge'].map(type => {
-                const items = state.hopeAssessments.filter(h => h.type === type);
-                return (
-                  <div key={type} className="flex items-center gap-3">
-                    <span className="text-xs text-slate-600 w-36">{type.replace('HOPE ', '')}</span>
-                    <div className="flex-1 flex gap-1">
-                      {items.map(item => (
-                        <span key={item.id} className={`badge text-[10px] ${item.status === 'Accepted' ? 'badge-success' : item.status === 'Submitted' ? 'badge-info' : item.status === 'Rejected' ? 'badge-urgent' : 'badge-neutral'}`}>
-                          {item.patientInitials}: {item.status}
-                        </span>
-                      ))}
-                      {items.length === 0 && <span className="text-[10px] text-slate-300">—</span>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+  const tabs: { key: QualityTab; label: string; icon: React.ReactNode }[] = [
+    { key: 'watchboard', label: 'Watchboard', icon: <Activity size={13} /> },
+    { key: 'oasis', label: 'OASIS Queue', icon: <FileText size={13} /> },
+    { key: 'hope', label: 'HOPE Queue', icon: <Star size={13} /> },
+    { key: 'cahps', label: 'CAHPS', icon: <BarChart3 size={13} /> },
+  ];
+
+  return (
+    <div>
+      <h2 className="page-title flex items-center gap-2 mb-5">
+        <Star size={22} className="text-advisa-accent" />
+        Quality Management
+      </h2>
+
+      {/* Tab Bar */}
+      <div className="flex gap-1 mb-5 bg-slate-100 p-1 rounded-lg w-fit">
+        {tabs.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-medium transition-all ${activeTab === tab.key ? 'bg-white text-advisa-accent shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'watchboard' && <Watchboard />}
+      {activeTab === 'oasis' && <OASISQueue />}
+      {activeTab === 'hope' && <HOPEQueue />}
+      {activeTab === 'cahps' && <CAHPSTab />}
     </div>
   );
 }

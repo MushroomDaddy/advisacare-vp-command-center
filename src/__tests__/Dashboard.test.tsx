@@ -1,8 +1,25 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import Dashboard from '../pages/Dashboard';
 import { AppProvider } from '../context/AppContext';
+
+// Mock recharts — include all chart types used
+vi.mock('recharts', () => ({
+  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  BarChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  PieChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Pie: () => null,
+  Bar: () => null,
+  XAxis: () => null,
+  YAxis: () => null,
+  Tooltip: () => null,
+  Legend: () => null,
+  Cell: () => null,
+  LabelList: () => null,
+  FunnelChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Funnel: () => null,
+}));
 
 function renderWithProviders() {
   return render(
@@ -14,50 +31,24 @@ function renderWithProviders() {
   );
 }
 
-describe('Dashboard KPIs', () => {
-  test('renders key KPI cards', () => {
+describe('Dashboard Page', () => {
+  test('renders executive brief', () => {
     renderWithProviders();
-    expect(screen.getByText('New Referrals')).toBeInTheDocument();
-    expect(screen.getByText('Open Shifts')).toBeInTheDocument();
+    expect(screen.getByText(/What Changed Since Yesterday/i)).toBeInTheDocument();
+  });
+
+  test('renders top actions section', () => {
+    renderWithProviders();
+    expect(screen.getByTestId('top-actions')).toBeInTheDocument();
+  });
+
+  test('shows SLA breaches stat card', () => {
+    renderWithProviders();
+    expect(screen.getAllByText('SLA Breaches').length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('shows quality risk score', () => {
+    renderWithProviders();
     expect(screen.getByText('Quality Risk')).toBeInTheDocument();
-  });
-
-  test('renders urgent referrals KPI', () => {
-    renderWithProviders();
-    expect(screen.getByText('Urgent Referrals')).toBeInTheDocument();
-  });
-
-  test('displays urgent activity section when applicable', () => {
-    renderWithProviders();
-    // Urgent activity appears when there are SLA breaches, expired credentials, or late notes
-    const urgentActivity = screen.queryByTestId('urgent-activity');
-    // May or may not be present depending on seed data state
-    if (urgentActivity) {
-      expect(urgentActivity).toBeInTheDocument();
-    }
-  });
-
-  test('renders pipeline and service charts', () => {
-    renderWithProviders();
-    expect(screen.getByText('Referral Pipeline')).toBeInTheDocument();
-    expect(screen.getByText('Service Distribution')).toBeInTheDocument();
-  });
-
-  test('renders compliance summary', () => {
-    renderWithProviders();
-    expect(screen.getByText('Compliance Summary')).toBeInTheDocument();
-    expect(screen.getByText('Expired')).toBeInTheDocument();
-    expect(screen.getByText('Critical Soon')).toBeInTheDocument();
-  });
-
-  test('has branch and service filters', () => {
-    renderWithProviders();
-    expect(screen.getByText('All Branches')).toBeInTheDocument();
-    expect(screen.getByText('All Services')).toBeInTheDocument();
-  });
-
-  test('has wallboard button', () => {
-    renderWithProviders();
-    expect(screen.getByText('Wallboard')).toBeInTheDocument();
   });
 });

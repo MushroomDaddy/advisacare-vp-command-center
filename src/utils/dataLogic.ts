@@ -1,109 +1,110 @@
-import type { Referral, StaffMember, ComplianceItem, QualityItem } from '../types';
+// ==============================
+// Data Logic — SLA, KPIs, Scoring, Readiness
+// ==============================
+
+import type {
+  Referral, StaffMember, ComplianceItem, QualityItem,
+  OASISAssessment, HOPEAssessment, ReferralReadiness, PartnerRiskLabel,
+  ReferralPartner
+} from '../types';
 import { getDaysUntilExpiry } from '../lib/dateUtils';
 
-// --- 1) Compliance Status Calculation ---
-// Calculated from expiryDate, never trusting stored status
+// --- Compliance Status ---
 export type ComplianceCategory = 'Expired' | 'Critical Soon' | 'Due Soon' | 'Compliant';
 
-/**
- * Returns compliance status based on days until expiry:
- * - Expired: daysLeft < 0
- * - Critical Soon: 0–30 days
- * - Due Soon: 31–90 days
- * - Compliant: >90 days
- */
 export function getComplianceStatus(item: ComplianceItem): ComplianceCategory {
-  const daysLeft = getDaysUntilExpiry(item.expiryDate);
-  if (daysLeft < 0) return 'Expired';
-  if (daysLeft <= 30) return 'Critical Soon';
-  if (daysLeft <= 90) return 'Due Soon';
+  const days = getDaysUntilExpiry(item.expiryDate);
+  if (days < 0) return 'Expired';
+  if (days <= 30) return 'Critical Soon';
+  if (days <= 90) return 'Due Soon';
   return 'Compliant';
 }
 
-/**
- * Check if a staff member has any work restriction (expired license or CPR)
- */
-export function hasWorkRestriction(staffId: string, complianceItems: ComplianceItem[]): { restricted: boolean; reasons: string[] } {
-  const staffItems = complianceItems.filter(c => c.staffId === staffId);
+export function hasWorkRestriction(staffId: string, compliance: ComplianceItem[]): { restricted: boolean; reasons: string[] } {
+  const staffItems = compliance.filter(c => c.staffId === staffId);
   const reasons: string[] = [];
-
   for (const item of staffItems) {
     const status = getComplianceStatus(item);
-    if (status === 'Expired') {
-      if (item.itemType.includes('License') || item.itemType === 'CPR Certification') {
-        reasons.push(`${item.itemType} expired`);
-      }
-    }
+    if (status === 'Expired') reasons.push(`${item.itemType} expired`);
   }
-
   return { restricted: reasons.length > 0, reasons };
 }
 
-// --- 2) KPI Derivation Functions ---
-export interface DashboardKPIs {
-  newReferrals24h: number;
-  urgentReferrals: number;
-  openShifts: number;
-  highRiskCases: number;
-  expiringLicenses: number;
-  stuckReferrals: number;
-  lateNotes: number;
+// --- SLA Risk vs SLA Breach ---
+export type SLACategory = 'Breach' | 'Risk' | 'On Track';
+
+export function getSLACategory(slaDeadline: string): SLACategory {
+  const daysLeft = getDaysUntilExpiry(slaDeadline);
+  if (daysLeft < 0) return 'Breach';
+  if (daysLeft <= 1) return 'Risk';
+  return 'On Track';
 }
 
+export function getSLALabel(slaDeadline: string): string {
+  const category = getSLACategory(slaDeadline);
+  const daysLeft = getDaysUntilExpiry(slaDeadline);
+  if (category === 'Breach') return `${Math.abs(daysLeft)}d overdue`;
+  if (category === 'Risk') return `${daysLeft}d left — at risk`;
+  return `${daysLeft}d left`;
+}
+
+// --- Referral Readiness ---
+export function calculateReadiness(referral: Referral): ReferralReadiness {
+  const allDocsUploaded = referral.documents.every(d => d.uploaded);
+  if (!allDocsUploaded) return 'Missing Docs';
+  if (referral.insuranceStatus !== 'Verified') return 'Ready for Eligibility';
+  if (referral.stage === 'Staffing' || referral.stage === 'New' || referral.stage === 'Eligibility') return 'Ready for Staffing';
+  return 'Ready for SOC';
+}
+
+export function getRecommendedNextAction(referral: Referral): string {
+  const missingDocs = referral.documents.filter(d => !d.uploaded);
+  if (missingDocs.length > 0) {
+    const names = missingDocs.map(d => d.type).join(', ');
+    return `Collect missing documents: ${names}`;
+  }
+  if (referral.insuranceStatus === 'Pending') return 'Verify insurance eligibility';
+  if (referral.insuranceStatus === 'Denied') return 'Appeal insurance denial or update payer';
+  if (referral.stage === 'Eligibility') return 'Complete eligibility review and move to Staffing';
+  if (referral.stage === 'Staffing') return 'Assign clinician and schedule SOC visit';
+  if (referral.stage === 'Scheduled') return 'Confirm SOC visit with patient and clinician';
+  if (referral.stage === 'New') return 'Review referral and request missing documents';
+  return 'Monitor case progress';
+}
+
+// --- Duplicate Detection ---
+export function findDuplicateReferrals(referral: Referral, allReferrals: Referral[]): Referral[] {
+  return allReferrals.filter(r =>
+    r.id !== referral.id &&
+    r.patientInitials === referral.patientInitials &&
+    r.source === referral.source &&
+    r.dischargeDate === referral.dischargeDate
+  );
+}
+
+// --- Dashboard KPIs ---
 export function calculateDashboardKPIs(
   referrals: Referral[],
-  _staff: StaffMember[],
-  compliance: ComplianceItem[],
-  quality: QualityItem[]
-): DashboardKPIs {
+  staff: StaffMember[],
+  compliance: ComplianceItem[]
+) {
   const now = new Date();
-  const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-
-  const newReferrals24h = referrals.filter(r =>
-    new Date(r.createdAt) >= twentyFourHoursAgo
-  ).length;
-
-  const urgentReferrals = referrals.filter(r =>
-    r.urgency === 'Urgent 24-48 hours' || r.urgency === 'Immediate'
-  ).length;
-
-  const openShifts = referrals.filter(r => r.stage === 'Staffing').length;
-
-  const highRiskReferrals = referrals.filter(r => r.urgency === 'Immediate').length;
-  const highRiskQuality = quality.filter(q =>
-    q.priority === 'High' && q.status === 'Open'
-  ).length;
-  const highRiskCases = highRiskReferrals + highRiskQuality;
-
-  const expiringLicenses = compliance.filter(item => {
-    const status = getComplianceStatus(item);
-    return status === 'Critical Soon' || status === 'Expired';
-  }).length;
-
-  // Stuck referrals: in same stage for more than 48 hours and not Started/Declined
-  const stuckReferrals = referrals.filter(r => {
-    if (r.stage === 'Started' || r.stage === 'Declined') return false;
-    const created = new Date(r.createdAt);
-    const hoursSince = (now.getTime() - created.getTime()) / (1000 * 60 * 60);
-    return hoursSince > 48;
-  }).length;
-
-  const lateNotes = quality.filter(q =>
-    q.type === 'Late Note' && q.status !== 'Complete'
-  ).length;
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
   return {
-    newReferrals24h,
-    urgentReferrals,
-    openShifts,
-    highRiskCases,
-    expiringLicenses,
-    stuckReferrals,
-    lateNotes,
+    newReferrals24h: referrals.filter(r => new Date(r.createdAt) > yesterday).length,
+    urgentReferrals: referrals.filter(r => r.urgency === 'Immediate' && r.stage !== 'Started' && r.stage !== 'Declined').length,
+    openShifts: referrals.filter(r => r.stage === 'Staffing').length,
+    slaBreaches: referrals.filter(r => r.stage !== 'Started' && r.stage !== 'Declined' && getSLACategory(r.slaDeadline) === 'Breach').length,
+    slaRisks: referrals.filter(r => r.stage !== 'Started' && r.stage !== 'Declined' && getSLACategory(r.slaDeadline) === 'Risk').length,
+    expiredCredentials: compliance.filter(c => getComplianceStatus(c) === 'Expired').length,
+    criticalSoonCredentials: compliance.filter(c => getComplianceStatus(c) === 'Critical Soon').length,
+    availableStaff: staff.filter(s => s.availability === 'Available').length,
+    uncoveredHighAcuity: referrals.filter(r => r.urgency === 'Immediate' && r.stage === 'Staffing').length,
   };
 }
 
-// --- 3) Best-Match Staffing Algorithm ---
+// --- 8-Factor Staffing Score ---
 export interface StaffScore {
   staff: StaffMember;
   score: number;
@@ -115,115 +116,146 @@ export interface StaffScore {
     workload: number;
     overtimeRisk: number;
     complianceBlocker: number;
+    continuityOfCare: number;
   };
 }
 
-/**
- * Score and rank staff for a given referral:
- * - Availability (20pts max)
- * - Role/license eligibility (20pts max)
- * - Specialty match (15pts max)
- * - Location/territory (15pts max)
- * - Current workload (15pts max)
- * - Overtime risk (10pts max)
- * - Compliance blockers (-30pts if restricted)
- */
 export function findBestMatchStaff(
   referral: Referral,
-  staffList: StaffMember[],
-  complianceItems?: ComplianceItem[]
+  staff: StaffMember[],
+  compliance: ComplianceItem[]
 ): StaffScore[] {
-  const serviceTypeRoles: Record<Referral['serviceType'], StaffMember['role'][]> = {
-    'Home Health': ['RN', 'LPN', 'HHA'],
-    'Hospice': ['RN', 'LPN', 'HHA'],
-    'Personal Care': ['HHA', 'CNA'],
-    'Therapy': ['PT', 'OT', 'ST'],
-    'Catastrophic Injury Care': ['RN', 'PT', 'OT'],
-  };
+  const scores: StaffScore[] = staff.map(s => {
+    let availability = 0;
+    if (s.availability === 'Available') availability = 20;
+    else if (s.availability === 'Partially') availability = 10;
 
-  const eligibleRoles = serviceTypeRoles[referral.serviceType] || [];
+    let credentials = 0;
+    const serviceRole = referral.serviceType.includes('SN') ? 'RN' : referral.serviceType.includes('PT') ? 'PT' : referral.serviceType.includes('OT') ? 'OT' : referral.serviceType;
+    if (s.role.includes(serviceRole) || s.certifications.some(c => c.includes(serviceRole))) credentials = 20;
+    else if (s.certifications.length > 0) credentials = 10;
 
-  return staffList.map(staff => {
-    const breakdown = {
-      availability: 0,
-      credentials: 0,
-      specialty: 0,
-      location: 0,
-      workload: 0,
-      overtimeRisk: 0,
-      complianceBlocker: 0,
+    let specialty = 0;
+    if (s.specialty.some(sp => referral.serviceType.includes(sp))) specialty = 15;
+    else if (s.specialty.length > 0) specialty = 5;
+
+    const location = s.location === referral.branch ? 15 : 5;
+
+    const loadPct = s.todayVisits / s.maxVisits;
+    const workload = loadPct < 0.5 ? 15 : loadPct < 0.75 ? 10 : loadPct < 0.9 ? 5 : 0;
+
+    const overtimeRisk = s.overtimeRisk === 'Low' ? 10 : s.overtimeRisk === 'Medium' ? 5 : 0;
+
+    // Continuity of care — new 8th factor
+    let continuityOfCare = 0;
+    if (s.continuityPatients.includes(referral.patientInitials)) continuityOfCare = 10;
+
+    // Compliance blocker
+    const restriction = hasWorkRestriction(s.id, compliance);
+    const complianceBlocker = restriction.restricted ? -50 : 0;
+
+    const score = Math.max(0, availability + credentials + specialty + location + workload + overtimeRisk + continuityOfCare + complianceBlocker);
+
+    return {
+      staff: s,
+      score,
+      breakdown: { availability, credentials, specialty, location, workload, overtimeRisk, complianceBlocker, continuityOfCare },
     };
+  });
 
-    // 1. Availability (20pts)
-    switch (staff.availability) {
-      case 'Available': breakdown.availability = 20; break;
-      case 'Partially': breakdown.availability = 10; break;
-      default: breakdown.availability = 0;
-    }
-
-    // 2. Role/license eligibility (20pts)
-    breakdown.credentials = eligibleRoles.includes(staff.role) ? 20 : 0;
-
-    // 3. Specialty match (15pts)
-    const matchingSpecialties = staff.specialties.filter(spec =>
-      spec.toLowerCase() === referral.serviceType.toLowerCase() ||
-      spec.toLowerCase().includes(referral.serviceType.toLowerCase().split(' ')[0])
-    );
-    breakdown.specialty = Math.min(matchingSpecialties.length * 8, 15);
-
-    // 4. Location/territory (15pts)
-    const locationMatch = staff.location && referral.dischargeFacility.toLowerCase().includes(staff.location.toLowerCase());
-    breakdown.location = locationMatch ? 15 : 0;
-
-    // 5. Workload (15pts) - fewer visits = higher score
-    const maxVisits = staff.maxVisits || 8;
-    const capacityUsed = staff.todayVisits / maxVisits;
-    breakdown.workload = Math.round(Math.max(0, (1 - capacityUsed)) * 15);
-
-    // 6. Overtime risk (10pts)
-    switch (staff.overtimeRisk) {
-      case 'Low': breakdown.overtimeRisk = 10; break;
-      case 'Medium': breakdown.overtimeRisk = 5; break;
-      default: breakdown.overtimeRisk = 0;
-    }
-
-    // 7. Compliance blockers (-30pts)
-    if (complianceItems) {
-      const restriction = hasWorkRestriction(staff.id, complianceItems);
-      if (restriction.restricted) {
-        breakdown.complianceBlocker = -30;
-      }
-    }
-
-    const score = Object.values(breakdown).reduce((sum, v) => sum + v, 0);
-
-    return { staff, score, breakdown };
-  })
-    .filter(entry => entry.score > 0)
-    .sort((a, b) => b.score - a.score);
+  return scores.sort((a, b) => b.score - a.score);
 }
 
-// --- 4) SOC Deadline Logic ---
-export function getSOCDaysUntilDeadline(referral: Referral): number | null {
-  if (!referral.dischargeDate) return null;
-  return getDaysUntilExpiry(referral.dischargeDate);
+// --- QAO Calculation (OASIS only) ---
+export function calculateQAOFromOASIS(oasisAssessments: OASISAssessment[]): {
+  eligible: number;
+  accepted: number;
+  submitted: number;
+  rejected: number;
+  qaoPct: number;
+} {
+  const eligible = oasisAssessments.length;
+  const accepted = oasisAssessments.filter(o => o.status === 'Accepted').length;
+  const submitted = oasisAssessments.filter(o => o.status === 'Submitted').length;
+  const rejected = oasisAssessments.filter(o => o.status === 'Rejected').length;
+  const qaoPct = eligible > 0 ? Math.round((accepted / eligible) * 100) : 0;
+  return { eligible, accepted, submitted, rejected, qaoPct };
 }
 
-export function getScheduledReferralsWithSOCDeadlines(referrals: Referral[]): Array<Referral & { socDaysLeft: number | null }> {
-  return referrals
-    .filter(r => r.stage === 'Scheduled')
-    .map(r => ({
-      ...r,
-      socDaysLeft: getSOCDaysUntilDeadline(r),
-    }));
+// --- Quality Risk Score ---
+export function calculateQualityRiskScore(
+  quality: QualityItem[],
+  oasis: OASISAssessment[],
+  hope: HOPEAssessment[],
+  visits: { visitStatus: string }[]
+): number {
+  let riskPoints = 0;
+  const maxPoints = 100;
+
+  // Overdue OASIS
+  const today = new Date();
+  const overdueOASIS = oasis.filter(o => o.status === 'Due' && new Date(o.dueDate) < today).length;
+  riskPoints += overdueOASIS * 10;
+
+  // Rejected OASIS
+  const rejectedOASIS = oasis.filter(o => o.status === 'Rejected').length;
+  riskPoints += rejectedOASIS * 8;
+
+  // Late notes
+  const lateNotes = quality.filter(q => q.type === 'Late Note' && q.status !== 'Complete').length;
+  riskPoints += lateNotes * 5;
+
+  // Missed visits
+  const missedVisits = visits.filter(v => v.visitStatus === 'Missed').length;
+  riskPoints += missedVisits * 10;
+
+  // Unresolved incidents
+  const incidents = quality.filter(q => q.type === 'Incident' && q.status !== 'Complete').length;
+  riskPoints += incidents * 12;
+
+  // Hospice comfort follow-up overdue
+  const hospiceOverdue = quality.filter(q => q.type === 'Hospice Comfort' && q.status !== 'Complete' && new Date(q.dueDate) < today).length;
+  riskPoints += hospiceOverdue * 7;
+
+  // Overdue HOPE
+  const overdueHOPE = hope.filter(h => h.status === 'Due' && new Date(h.dueDate) < today).length;
+  riskPoints += overdueHOPE * 8;
+
+  return Math.min(Math.round(riskPoints), maxPoints);
 }
 
-// --- 5) Duplicate Referral Detection ---
-export function findDuplicateReferrals(referral: Referral, allReferrals: Referral[]): Referral[] {
-  return allReferrals.filter(r =>
-    r.id !== referral.id &&
-    r.patientInitials === referral.patientInitials &&
-    r.source === referral.source &&
-    r.dischargeDate === referral.dischargeDate
-  );
+// --- Partner Risk Label ---
+export function calculatePartnerRiskLabel(partner: ReferralPartner): PartnerRiskLabel {
+  if (partner.trends.length < 2) return 'Stable';
+  const recent = partner.trends[0];
+  const prev = partner.trends[1];
+  if (!recent || !prev) return 'Stable';
+
+  const volumeChange = recent.volume - prev.volume;
+  const conversionRecent = recent.volume > 0 ? recent.accepted / recent.volume : 0;
+  const conversionPrev = prev.volume > 0 ? prev.accepted / prev.volume : 0;
+
+  if (volumeChange > 2 && conversionRecent >= conversionPrev) return 'Growing';
+  if (recent.volume === 0 || conversionRecent < 0.3) return 'At Risk';
+  if (volumeChange < -2 || conversionRecent < conversionPrev - 0.15) return 'Needs Attention';
+  return 'Stable';
+}
+
+// --- Stage Aging (hours since creation) ---
+export function getStageAgingHours(createdAt: string): number {
+  const now = new Date();
+  return Math.round((now.getTime() - new Date(createdAt).getTime()) / (1000 * 60 * 60));
+}
+
+// --- Referral-to-SOC Timer ---
+export function getReferralToSOCDays(referral: Referral): number | null {
+  if (referral.stage === 'Started') {
+    const started = referral.timeline.find(e => e.action.toLowerCase().includes('started'));
+    if (started) {
+      const created = new Date(referral.createdAt);
+      const startedDate = new Date(started.date);
+      return Math.round((startedDate.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+    }
+  }
+  return null;
 }

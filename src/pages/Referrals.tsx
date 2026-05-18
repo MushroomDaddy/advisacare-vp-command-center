@@ -1,11 +1,12 @@
 import { useAppState } from '../context/AppContext';
 import { useState } from 'react';
 import { getDaysUntilExpiry, formatDate } from '../lib/dateUtils';
-import { findDuplicateReferrals } from '../utils/dataLogic';
+import { findDuplicateReferrals, getSLACategory, getSLALabel, calculateReadiness, getRecommendedNextAction, getStageAgingHours, getReferralToSOCDays } from '../utils/dataLogic';
 import type { Referral, ReferralDocument } from '../types';
 import {
   ClipboardList, AlertTriangle, Clock, FileText, Upload, X,
-  Eye, Brain, User, Calendar, CheckCircle, XCircle, Copy
+  Eye, Brain, User, Calendar, CheckCircle, XCircle, Copy,
+  ArrowRight, Activity, Timer, BarChart3
 } from 'lucide-react';
 
 const stages: Referral['stage'][] = ['New', 'Missing Docs', 'Eligibility', 'Staffing', 'Scheduled', 'Started', 'Declined'];
@@ -19,13 +20,23 @@ const stageColors: Record<string, string> = {
   'Declined': 'bg-red-100 text-red-800 border-red-200',
 };
 
+const readinessColors: Record<string, string> = {
+  'Missing Docs': 'badge-urgent',
+  'Ready for Eligibility': 'badge-warning',
+  'Ready for Staffing': 'badge-info',
+  'Ready for SOC': 'badge-success',
+};
+
 function SLAClock({ deadline }: { deadline: string }) {
-  const daysLeft = getDaysUntilExpiry(deadline);
-  const color = daysLeft < 0 ? 'text-red-600' : daysLeft <= 1 ? 'text-red-500' : daysLeft <= 3 ? 'text-amber-500' : 'text-emerald-500';
+  const category = getSLACategory(deadline);
+  const label = getSLALabel(deadline);
+  const color = category === 'Breach' ? 'text-red-600' : category === 'Risk' ? 'text-amber-600' : 'text-emerald-500';
   return (
-    <span className={`flex items-center gap-1 text-xs font-medium ${color}`}>
+    <span className={`flex items-center gap-1 text-xs font-medium ${color}`} data-testid="sla-clock">
       <Clock size={11} />
-      {daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : `${daysLeft}d left`}
+      {label}
+      {category === 'Breach' && <span className="badge badge-urgent text-[8px] ml-1">BREACH</span>}
+      {category === 'Risk' && <span className="badge badge-warning text-[8px] ml-1">RISK</span>}
     </span>
   );
 }
@@ -75,14 +86,24 @@ function AISummary({ referral }: { referral: Referral }) {
   );
 }
 
-function DetailDrawer({ referral, onClose, onUpload }: { referral: Referral; onClose: () => void; onUpload: (id: string, docType: string) => void }) {
+function DetailDrawer({ referral, onClose, onUpload, onMoveStage }: {
+  referral: Referral;
+  onClose: () => void;
+  onUpload: (id: string, docType: string) => void;
+  onMoveStage: (id: string, stage: Referral['stage']) => void;
+}) {
   const { state } = useAppState();
   const duplicates = findDuplicateReferrals(referral, state.referrals);
+  const readiness = calculateReadiness(referral);
+  const nextAction = getRecommendedNextAction(referral);
+  const agingHours = getStageAgingHours(referral.createdAt);
+  const socDays = getReferralToSOCDays(referral);
+  const allDocsUploaded = referral.documents.every(d => d.uploaded);
 
   return (
     <div className="fixed inset-0 z-40 flex">
       <div className="flex-1 bg-black/30" onClick={onClose} />
-      <div className="w-[480px] bg-white shadow-2xl overflow-y-auto border-l border-advisa-border">
+      <div className="w-[500px] bg-white shadow-2xl overflow-y-auto border-l border-advisa-border">
         <div className="sticky top-0 bg-white border-b border-advisa-border px-5 py-4 flex items-center justify-between z-10">
           <div>
             <p className="text-lg font-bold text-slate-800">{referral.patientInitials}</p>
@@ -94,11 +115,37 @@ function DetailDrawer({ referral, onClose, onUpload }: { referral: Referral; onC
         <div className="p-5 space-y-5">
           {/* Duplicate Warning */}
           {duplicates.length > 0 && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 text-xs text-amber-800">
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 text-xs text-amber-800" data-testid="duplicate-warning">
               <Copy size={13} />
               <span><strong>Possible duplicate:</strong> {duplicates.length} similar referral{duplicates.length > 1 ? 's' : ''} found ({duplicates.map(d => d.id).join(', ')})</span>
             </div>
           )}
+
+          {/* Readiness + Next Action */}
+          <div className="p-3 bg-sky-50 border border-sky-200 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-sky-800 flex items-center gap-1"><Activity size={12} /> Readiness</p>
+              <span className={`badge ${readinessColors[readiness]}`}>{readiness}</span>
+            </div>
+            <p className="text-xs text-sky-700 flex items-center gap-1">
+              <ArrowRight size={10} /> <strong>Next:</strong> {nextAction}
+            </p>
+            {/* Ready for Eligibility → show move button */}
+            {allDocsUploaded && referral.stage !== 'Started' && referral.stage !== 'Declined' && readiness === 'Ready for Eligibility' && (
+              <button
+                onClick={() => onMoveStage(referral.id, 'Eligibility')}
+                className="btn-primary text-xs mt-2"
+                data-testid="move-to-eligibility"
+              >
+                <ArrowRight size={11} /> Move to Eligibility Review
+              </button>
+            )}
+            {readiness === 'Ready for Staffing' && referral.stage !== 'Scheduled' && referral.stage !== 'Started' && (
+              <button onClick={() => onMoveStage(referral.id, 'Staffing')} className="btn-primary text-xs mt-2">
+                <ArrowRight size={11} /> Move to Staffing
+              </button>
+            )}
+          </div>
 
           {/* Status / SLA */}
           <div className="grid grid-cols-2 gap-3">
@@ -121,6 +168,24 @@ function DetailDrawer({ referral, onClose, onUpload }: { referral: Referral; onC
               <span className={`badge mt-1 ${referral.insuranceStatus === 'Verified' ? 'badge-success' : referral.insuranceStatus === 'Denied' ? 'badge-urgent' : 'badge-warning'}`}>
                 {referral.insuranceStatus}
               </span>
+            </div>
+          </div>
+
+          {/* Stage Aging + SOC Timer */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3 bg-slate-50 rounded-lg flex items-center gap-2">
+              <Timer size={13} className="text-slate-400" />
+              <div>
+                <p className="stat-label">Stage Aging</p>
+                <p className="text-sm font-semibold text-slate-700">{agingHours}h in pipeline</p>
+              </div>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-lg flex items-center gap-2">
+              <BarChart3 size={13} className="text-slate-400" />
+              <div>
+                <p className="stat-label">Referral→SOC</p>
+                <p className="text-sm font-semibold text-slate-700">{socDays !== null ? `${socDays} days` : 'In progress'}</p>
+              </div>
             </div>
           </div>
 
@@ -167,6 +232,25 @@ function DetailDrawer({ referral, onClose, onUpload }: { referral: Referral; onC
             </div>
           </div>
 
+          {/* Timeline */}
+          {referral.timeline.length > 0 && (
+            <div>
+              <p className="section-title mb-2 flex items-center gap-2"><Activity size={13} /> Timeline</p>
+              <div className="space-y-2 relative pl-4 border-l-2 border-advisa-border">
+                {referral.timeline.map((event, idx) => (
+                  <div key={idx} className="relative">
+                    <div className="absolute -left-[21px] top-1 w-3 h-3 bg-advisa-accent rounded-full border-2 border-white" />
+                    <div className="text-xs">
+                      <p className="font-semibold text-slate-700">{event.action}</p>
+                      <p className="text-slate-400">{event.date} · {event.user}</p>
+                      {event.details && <p className="text-slate-500 mt-0.5">{event.details}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* AI Summary */}
           <AISummary referral={referral} />
         </div>
@@ -176,7 +260,7 @@ function DetailDrawer({ referral, onClose, onUpload }: { referral: Referral; onC
 }
 
 export default function Referrals() {
-  const { state, updateReferralStage, updateReferral, addAuditEntry } = useAppState();
+  const { state, updateReferralStage, updateReferral, addAuditEntry, addToast } = useAppState();
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
   const [filterStage, setFilterStage] = useState('All');
   const [filterUrgency, setFilterUrgency] = useState('All');
@@ -189,19 +273,36 @@ export default function Referrals() {
     (filterUrgency === 'All' || r.urgency === filterUrgency)
   );
 
+  // Lost referral reason analytics
+  const declinedReferrals = state.referrals.filter(r => r.stage === 'Declined' && r.lostReason);
+  const lostReasonCounts = declinedReferrals.reduce<Record<string, number>>((acc, r) => {
+    if (r.lostReason) acc[r.lostReason] = (acc[r.lostReason] || 0) + 1;
+    return acc;
+  }, {});
+
   const handleStageChange = (id: string, newStage: Referral['stage']) => {
     const ref = state.referrals.find(r => r.id === id);
+    if (!ref) return;
+    const oldStage = ref.stage;
+    const now = new Date().toISOString().split('T')[0];
     updateReferralStage(id, newStage);
+    // Update timeline
+    updateReferral(id, {
+      timeline: [...ref.timeline, { date: now, action: `Stage → ${newStage}`, user: state.currentUser.name }],
+      readiness: calculateReadiness({ ...ref, stage: newStage }),
+      recommendedNextAction: getRecommendedNextAction({ ...ref, stage: newStage }),
+    });
     addAuditEntry({
       user: state.currentUser.name,
       role: state.currentUser.role,
       action: 'Updated',
       recordType: 'Referral',
       recordId: id,
-      details: `Stage changed to ${newStage} for ${ref?.patientInitials}`,
-      before: ref?.stage,
+      details: `Stage changed to ${newStage} for ${ref.patientInitials}`,
+      before: oldStage,
       after: newStage,
     });
+    addToast(`${ref.patientInitials} moved to ${newStage}`, 'success');
   };
 
   const handleDocUpload = (referralId: string, docType: string) => {
@@ -210,7 +311,23 @@ export default function Referrals() {
     const updatedDocs = ref.documents.map(d =>
       d.type === docType ? { ...d, uploaded: true, uploadedAt: new Date().toISOString() } : d
     );
-    updateReferral(referralId, { documents: updatedDocs, documentsUploaded: updatedDocs.filter(d => d.uploaded).length });
+    const docsUploaded = updatedDocs.filter(d => d.uploaded).length;
+    const missing = updatedDocs.filter(d => !d.uploaded).length;
+    const physOrders = updatedDocs.find(d => d.type === 'Physician Orders')?.uploaded ?? ref.physicianOrdersReceived;
+    const allDone = updatedDocs.every(d => d.uploaded);
+    const newReadiness = calculateReadiness({ ...ref, documents: updatedDocs });
+    const newNextAction = getRecommendedNextAction({ ...ref, documents: updatedDocs });
+    const now = new Date().toISOString().split('T')[0];
+
+    updateReferral(referralId, {
+      documents: updatedDocs,
+      documentsUploaded: docsUploaded,
+      missingItems: missing,
+      physicianOrdersReceived: physOrders,
+      readiness: newReadiness,
+      recommendedNextAction: newNextAction,
+      timeline: [...ref.timeline, { date: now, action: `Uploaded: ${docType}`, user: state.currentUser.name }],
+    });
     addAuditEntry({
       user: state.currentUser.name,
       role: state.currentUser.role,
@@ -219,6 +336,12 @@ export default function Referrals() {
       recordId: referralId,
       details: `Uploaded ${docType} for ${ref.patientInitials}`,
     });
+    addToast(`${docType} uploaded for ${ref.patientInitials}`, 'success');
+
+    // Auto-transition if all docs uploaded and stage is Missing Docs or New
+    if (allDone && (ref.stage === 'Missing Docs' || ref.stage === 'New')) {
+      addToast(`All documents received for ${ref.patientInitials} — Ready for Eligibility Review`, 'info');
+    }
   };
 
   const missingDocsCount = state.referrals.reduce((sum, r) => sum + r.documents.filter(d => !d.uploaded).length, 0);
@@ -252,6 +375,21 @@ export default function Referrals() {
         </select>
       </div>
 
+      {/* Lost Referral Reason Analytics */}
+      {Object.keys(lostReasonCounts).length > 0 && (
+        <div className="card mb-5 bg-red-50/50 border-red-200">
+          <p className="section-title mb-2 flex items-center gap-2 text-red-800"><XCircle size={13} /> Lost Referral Reasons</p>
+          <div className="flex gap-3 flex-wrap">
+            {Object.entries(lostReasonCounts).map(([reason, count]) => (
+              <div key={reason} className="px-3 py-1.5 bg-white rounded-lg border border-red-200 text-xs">
+                <span className="text-red-700 font-medium">{reason}</span>
+                <span className="ml-2 badge badge-urgent text-[10px]">{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {viewMode === 'kanban' ? (
         /* Kanban View */
         <div className="flex gap-3 overflow-x-auto pb-4">
@@ -283,6 +421,9 @@ export default function Referrals() {
                           <span className="text-[10px] text-red-500 flex items-center gap-0.5"><AlertTriangle size={9} /> Docs</span>
                         )}
                       </div>
+                      <div className="mt-1">
+                        <span className={`badge text-[8px] ${readinessColors[r.readiness]}`}>{r.readiness}</span>
+                      </div>
                     </div>
                   ))}
                   {stageReferrals.length === 0 && <p className="text-[10px] text-slate-300 text-center py-4">Empty</p>}
@@ -303,6 +444,7 @@ export default function Referrals() {
                 <th className="table-head">Source</th>
                 <th className="table-head">Docs</th>
                 <th className="table-head">SLA</th>
+                <th className="table-head">Readiness</th>
                 <th className="table-head">Owner</th>
                 <th className="table-head">Stage</th>
                 <th className="table-head">Actions</th>
@@ -333,6 +475,7 @@ export default function Referrals() {
                       )}
                     </td>
                     <td className="table-cell"><SLAClock deadline={r.slaDeadline} /></td>
+                    <td className="table-cell"><span className={`badge text-[10px] ${readinessColors[r.readiness]}`}>{r.readiness}</span></td>
                     <td className="table-cell text-slate-500 text-xs">{r.assignedOwner}</td>
                     <td className="table-cell">
                       <select
@@ -363,6 +506,7 @@ export default function Referrals() {
           referral={selectedReferral}
           onClose={() => setSelectedReferral(null)}
           onUpload={handleDocUpload}
+          onMoveStage={handleStageChange}
         />
       )}
     </div>

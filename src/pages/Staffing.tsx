@@ -1,125 +1,210 @@
 import { useAppState } from '../context/AppContext';
+import { useState, useMemo } from 'react';
 import { findBestMatchStaff, hasWorkRestriction, type StaffScore } from '../utils/dataLogic';
-import { useState } from 'react';
-import type { StaffMember } from '../types';
+import type { Referral, ShiftBoardEntry } from '../types';
 import {
-  Users, AlertTriangle, CheckCircle, Clock, UserCheck,
-  BarChart3, Zap, MapPin, Shield, TrendingUp, Send, ToggleLeft, ToggleRight
+  Users, Star, AlertTriangle, X, ChevronDown, ChevronUp,
+  Clock, UserCheck, BarChart3, Briefcase
 } from 'lucide-react';
 
-function ScoreBreakdown({ score }: { score: StaffScore }) {
-  const items = [
-    { label: 'Availability', value: score.breakdown.availability, max: 20, icon: <Clock size={11} /> },
-    { label: 'Credentials', value: score.breakdown.credentials, max: 20, icon: <Shield size={11} /> },
-    { label: 'Specialty', value: score.breakdown.specialty, max: 15, icon: <Zap size={11} /> },
-    { label: 'Location', value: score.breakdown.location, max: 15, icon: <MapPin size={11} /> },
-    { label: 'Workload', value: score.breakdown.workload, max: 15, icon: <BarChart3 size={11} /> },
-    { label: 'Overtime', value: score.breakdown.overtimeRisk, max: 10, icon: <TrendingUp size={11} /> },
+function ScoreBreakdown({ breakdown }: { breakdown: StaffScore['breakdown'] }) {
+  const factors = [
+    { label: 'Availability', value: breakdown.availability, max: 20 },
+    { label: 'Credentials', value: breakdown.credentials, max: 20 },
+    { label: 'Specialty', value: breakdown.specialty, max: 15 },
+    { label: 'Location', value: breakdown.location, max: 15 },
+    { label: 'Workload', value: breakdown.workload, max: 15 },
+    { label: 'Overtime Risk', value: breakdown.overtimeRisk, max: 10 },
+    { label: 'Continuity', value: breakdown.continuityOfCare, max: 10 },
+    { label: 'Compliance', value: breakdown.complianceBlocker, max: 0 },
   ];
-
   return (
-    <div className="space-y-1.5">
-      {items.map(item => (
-        <div key={item.label} className="flex items-center gap-2 text-xs">
-          <span className="text-slate-400 w-3">{item.icon}</span>
-          <span className="text-slate-600 w-20">{item.label}</span>
-          <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+    <div className="space-y-1.5 mt-2">
+      {factors.map(f => (
+        <div key={f.label} className="flex items-center gap-2 text-[10px]">
+          <span className="w-20 text-slate-500 truncate">{f.label}</span>
+          <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-advisa-accent rounded-full transition-all"
-              style={{ width: `${Math.max(0, (item.value / item.max) * 100)}%` }}
+              className={`h-full rounded-full ${f.value < 0 ? 'bg-red-400' : f.value > 0 ? 'bg-advisa-accent' : 'bg-slate-200'}`}
+              style={{ width: `${f.max > 0 ? Math.max(0, (f.value / f.max) * 100) : 100}%` }}
             />
           </div>
-          <span className="text-slate-500 w-8 text-right font-mono">{item.value}/{item.max}</span>
+          <span className={`w-6 text-right font-semibold ${f.value < 0 ? 'text-red-500' : 'text-slate-600'}`}>{f.value}</span>
         </div>
       ))}
-      {score.breakdown.complianceBlocker < 0 && (
-        <div className="flex items-center gap-2 text-xs text-red-600">
-          <AlertTriangle size={11} />
-          <span>Compliance blocker: {score.breakdown.complianceBlocker} pts</span>
-        </div>
-      )}
-      <div className="border-t border-slate-100 pt-1.5 flex justify-between items-center">
-        <span className="text-xs font-semibold text-slate-700">Total Score</span>
-        <span className={`text-sm font-bold ${score.score >= 60 ? 'text-emerald-600' : score.score >= 30 ? 'text-amber-600' : 'text-red-600'}`}>
-          {score.score}/95
-        </span>
-      </div>
     </div>
   );
 }
 
+function StaffMatchCard({ score, referral, onAssign }: { score: StaffScore; referral: Referral; onAssign: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const availColor = score.staff.availability === 'Available' ? 'text-emerald-600' : score.staff.availability === 'Partially' ? 'text-amber-600' : 'text-red-500';
+  const scoreColor = score.score >= 70 ? 'bg-emerald-100 text-emerald-800' : score.score >= 40 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800';
+
+  return (
+    <div className={`border rounded-lg p-3 ${score.breakdown.complianceBlocker < 0 ? 'border-red-200 bg-red-50/50' : 'border-advisa-border bg-white'}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${scoreColor}`}>
+            {score.score}
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-800">{score.staff.name}</p>
+            <p className="text-[10px] text-slate-400">{score.staff.role} · {score.staff.location}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs font-medium ${availColor}`}>{score.staff.availability}</span>
+          {score.breakdown.complianceBlocker < 0 ? (
+            <span className="badge badge-urgent text-[9px]">BLOCKED</span>
+          ) : (
+            <button onClick={onAssign} className="btn-primary text-[10px] py-1 px-2">
+              <UserCheck size={10} /> Assign
+            </button>
+          )}
+          <button onClick={() => setExpanded(!expanded)} className="p-1 hover:bg-slate-100 rounded">
+            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+        </div>
+      </div>
+      <div className="flex gap-2 mt-2 text-[10px]">
+        <span className="text-slate-500">{score.staff.todayVisits}/{score.staff.maxVisits} visits</span>
+        <span className="text-slate-300">·</span>
+        <span className={`${score.staff.overtimeRisk === 'High' ? 'text-red-500' : score.staff.overtimeRisk === 'Medium' ? 'text-amber-500' : 'text-slate-500'}`}>
+          OT Risk: {score.staff.overtimeRisk}
+        </span>
+        <span className="text-slate-300">·</span>
+        <span className="text-slate-500">{score.staff.certifications.join(', ')}</span>
+      </div>
+      {score.staff.continuityPatients.includes(referral.patientInitials) && (
+        <p className="text-[10px] text-emerald-600 mt-1 flex items-center gap-1"><Star size={9} /> Continuity of care — previously served this patient</p>
+      )}
+      {expanded && <ScoreBreakdown breakdown={score.breakdown} />}
+    </div>
+  );
+}
+
+function ShiftBoardTable({ entries }: { entries: ShiftBoardEntry[] }) {
+  const { updateShiftBoard, addToast } = useAppState();
+  if (entries.length === 0) return <p className="text-xs text-slate-400 text-center py-4">No open shifts</p>;
+
+  return (
+    <table className="w-full text-xs">
+      <thead>
+        <tr>
+          <th className="table-head">Patient</th>
+          <th className="table-head">Service</th>
+          <th className="table-head">Acuity</th>
+          <th className="table-head">Role Needed</th>
+          <th className="table-head">Deadline</th>
+          <th className="table-head">Status</th>
+          <th className="table-head">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {entries.map(e => (
+          <tr key={e.id} className="hover:bg-slate-50">
+            <td className="table-cell font-medium">{e.patientInitials}</td>
+            <td className="table-cell">{e.serviceType}</td>
+            <td className="table-cell"><span className={`badge text-[9px] ${e.acuity === 'High' ? 'badge-urgent' : 'badge-warning'}`}>{e.acuity}</span></td>
+            <td className="table-cell">{e.neededRole}</td>
+            <td className="table-cell text-slate-500">{e.deadline}</td>
+            <td className="table-cell">
+              <span className={`badge text-[9px] ${e.status === 'Open' ? 'badge-warning' : e.status === 'Offered' ? 'badge-info' : e.status === 'Accepted' ? 'badge-success' : 'badge-urgent'}`}>
+                {e.status}
+              </span>
+            </td>
+            <td className="table-cell">
+              {e.status === 'Open' && (
+                <button onClick={() => { updateShiftBoard(e.id, { status: 'Offered' }); addToast(`Shift offered for ${e.patientInitials}`, 'info'); }} className="text-advisa-accent text-[10px] hover:underline">
+                  Offer Shift
+                </button>
+              )}
+              {e.status === 'Offered' && (
+                <div className="flex gap-1">
+                  <button onClick={() => { updateShiftBoard(e.id, { status: 'Accepted' }); addToast(`Shift accepted for ${e.patientInitials}`, 'success'); }} className="text-emerald-600 text-[10px] hover:underline">Accept</button>
+                  <button onClick={() => { updateShiftBoard(e.id, { status: 'Declined' }); addToast(`Shift declined for ${e.patientInitials}`, 'warning'); }} className="text-red-500 text-[10px] hover:underline">Decline</button>
+                </div>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 export default function Staffing() {
-  const { state, updateStaff, updateReferralStage, addAuditEntry } = useAppState();
-  const [selectedReferral, setSelectedReferral] = useState<string>('');
-  const [expandedStaff, setExpandedStaff] = useState<string | null>(null);
-  const [showOpenShifts, setShowOpenShifts] = useState(false);
+  const { state, updateReferral, updateStaff, addVisit, addAuditEntry, addToast } = useAppState();
+  const [selectedReferral, setSelectedReferral] = useState<Referral | null>(null);
+  const [showShiftBoard, setShowShiftBoard] = useState(false);
 
-  const referralOptions = state.referrals.filter(r => r.stage !== 'Started' && r.stage !== 'Declined');
-  const selectedRef = state.referrals.find(r => r.id === selectedReferral);
+  const unstaffedReferrals = state.referrals.filter(r => r.stage === 'Staffing');
 
-  const scores = selectedRef ? findBestMatchStaff(selectedRef, state.staff, state.compliance) : [];
+  const scores = useMemo(() => {
+    if (!selectedReferral) return [];
+    return findBestMatchStaff(selectedReferral, state.staff, state.compliance);
+  }, [selectedReferral, state.staff, state.compliance]);
 
-  // Open shifts = referrals in Staffing stage
-  const openShifts = state.referrals.filter(r => r.stage === 'Staffing');
+  const handleAssign = (staffScore: StaffScore) => {
+    if (!selectedReferral) return;
+    const ref = selectedReferral;
+    const staff = staffScore.staff;
+    const now = new Date().toISOString().split('T')[0];
 
-  // Staff stats
-  const availableCount = state.staff.filter(s => s.availability === 'Available').length;
-  const confirmedCount = state.staff.filter(s => s.shiftStatus === 'Confirmed').length;
-  const totalVisitsToday = state.staff.reduce((sum, s) => sum + s.todayVisits, 0);
-
-  // Heatmap data
-  const heatmapData = state.staff.map(s => ({
-    name: s.name,
-    load: Math.round((s.todayVisits / s.maxVisits) * 100),
-    visits: s.todayVisits,
-    max: s.maxVisits,
-    overtime: s.overtimeRisk,
-  }));
-
-  const handleToggleAvailability = (staffId: string) => {
-    const staff = state.staff.find(s => s.id === staffId);
-    if (!staff) return;
-    const newAvailability = staff.availability === 'Available' ? 'Unavailable' : 'Available';
-    updateStaff(staffId, { availability: newAvailability });
-    addAuditEntry({
-      user: state.currentUser.name,
-      role: state.currentUser.role,
-      action: 'Updated',
-      recordType: 'Staff',
-      recordId: staffId,
-      details: `Availability changed to ${newAvailability} for ${staff.name}`,
-      before: staff.availability,
-      after: newAvailability,
+    // Update referral → Scheduled, set owner
+    updateReferral(ref.id, {
+      stage: 'Scheduled',
+      assignedOwner: staff.name,
+      timeline: [...ref.timeline, {
+        date: now,
+        action: `Staff assigned — ${staff.name}`,
+        user: state.currentUser.name,
+        details: `Match score: ${staffScore.score}/105`,
+      }],
+      readiness: 'Ready for SOC',
+      recommendedNextAction: 'Confirm SOC visit with patient and clinician',
     });
-  };
 
-  const handleAssignToReferral = (staffMember: StaffMember) => {
-    if (!selectedRef) return;
-    updateReferralStage(selectedRef.id, 'Scheduled');
+    // Update staff visits
+    updateStaff(staff.id, { todayVisits: staff.todayVisits + 1 });
+
+    // Create visit record
+    addVisit({
+      id: crypto.randomUUID(),
+      patientInitials: ref.patientInitials,
+      address: 'TBD — Pending patient confirmation',
+      time: 'TBD',
+      serviceType: ref.serviceType,
+      visitStatus: 'Scheduled',
+      staffName: staff.name,
+      acuity: ref.urgency === 'Immediate' ? 'High' : 'Medium',
+      checklist: [
+        { task: 'Verify patient identity', completed: false },
+        { task: 'Complete assessment', completed: false },
+        { task: 'Document visit', completed: false },
+      ],
+      evv: { clockIn: null, clockOut: null, gpsLatitude: null, gpsLongitude: null, gpsAddress: '', syncStatus: 'Pending', patientSignature: false, caregiverSignature: false },
+      suppliesNeeded: [],
+      notes: '',
+      evvExceptions: [],
+    });
+
+    // Audit
     addAuditEntry({
       user: state.currentUser.name,
       role: state.currentUser.role,
       action: 'Updated',
       recordType: 'Referral',
-      recordId: selectedRef.id,
-      details: `Assigned ${staffMember.name} to ${selectedRef.patientInitials}, stage → Scheduled`,
-      before: selectedRef.stage,
+      recordId: ref.id,
+      details: `Assigned ${staff.name} to ${ref.patientInitials} (score: ${staffScore.score})`,
+      before: 'Staffing',
       after: 'Scheduled',
     });
-  };
 
-  const handleShiftOffer = (staffId: string) => {
-    const staff = state.staff.find(s => s.id === staffId);
-    if (!staff) return;
-    updateStaff(staffId, { shiftStatus: 'Unconfirmed' });
-    addAuditEntry({
-      user: state.currentUser.name,
-      role: state.currentUser.role,
-      action: 'Created',
-      recordType: 'Staff',
-      recordId: staffId,
-      details: `Shift offer sent to ${staff.name}`,
-    });
+    addToast(`${staff.name} assigned to ${ref.patientInitials}`, 'success');
+    setSelectedReferral(null);
   };
 
   return (
@@ -128,197 +213,109 @@ export default function Staffing() {
         <div>
           <h2 className="page-title flex items-center gap-2">
             <Users size={22} className="text-advisa-accent" />
-            Staffing Coverage Dashboard
+            Staffing & Assignment
           </h2>
-          <p className="text-xs text-slate-400 mt-1">{state.staff.length} staff · {availableCount} available · {totalVisitsToday} visits today</p>
+          <p className="text-xs text-slate-400 mt-1">
+            {unstaffedReferrals.length} awaiting assignment · {state.staff.filter(s => s.availability === 'Available').length} available staff · {state.shiftBoard.filter(s => s.status === 'Open').length} open shifts
+          </p>
         </div>
-        <button onClick={() => setShowOpenShifts(!showOpenShifts)} className="btn-secondary text-xs">
-          <Clock size={13} /> Open Shifts ({openShifts.length})
+        <button onClick={() => setShowShiftBoard(!showShiftBoard)} className="btn-secondary text-xs">
+          <Briefcase size={13} /> {showShiftBoard ? 'Hide' : 'Show'} Shift Board
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-5">
-        <div className="stat-card">
-          <div className="flex items-center gap-2 mb-1"><UserCheck size={14} className="text-emerald-500" /><p className="stat-label">Available</p></div>
-          <p className="stat-value text-emerald-600">{availableCount}</p>
-        </div>
-        <div className="stat-card">
-          <div className="flex items-center gap-2 mb-1"><CheckCircle size={14} className="text-sky-500" /><p className="stat-label">Confirmed</p></div>
-          <p className="stat-value text-sky-600">{confirmedCount}</p>
-        </div>
-        <div className="stat-card">
-          <div className="flex items-center gap-2 mb-1"><BarChart3 size={14} className="text-amber-500" /><p className="stat-label">Today&apos;s Visits</p></div>
-          <p className="stat-value text-amber-600">{totalVisitsToday}</p>
-        </div>
-        <div className="stat-card">
-          <div className="flex items-center gap-2 mb-1"><Clock size={14} className="text-violet-500" /><p className="stat-label">Open Shifts</p></div>
-          <p className="stat-value text-violet-600">{openShifts.length}</p>
-        </div>
-      </div>
-
-      {/* Open Shift Board */}
-      {showOpenShifts && (
-        <div className="card mb-5 bg-amber-50/50 border-amber-200">
-          <p className="section-title mb-3 flex items-center gap-2"><Clock size={13} /> Open Shift Board</p>
-          {openShifts.length === 0 ? (
-            <p className="text-xs text-slate-400">No open shifts</p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {openShifts.map(r => (
-                <div key={r.id} className="bg-white p-3 rounded-lg border border-amber-200 text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-slate-800">{r.patientInitials} — {r.serviceType}</span>
-                    <span className={`badge ${r.urgency === 'Immediate' ? 'badge-urgent' : 'badge-warning'}`}>{r.urgency}</span>
-                  </div>
-                  <p className="text-slate-500 mt-1">{r.source} · {r.dischargeFacility}</p>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Shift Board */}
+      {showShiftBoard && (
+        <div className="card mb-5">
+          <div className="card-header mb-3"><Briefcase size={15} /> Open Shift Board</div>
+          <ShiftBoardTable entries={state.shiftBoard} />
         </div>
       )}
 
-      {/* Best-Match Section */}
+      {/* Staff Overview */}
       <div className="card mb-5">
-        <p className="section-title mb-3 flex items-center gap-2"><Zap size={13} /> Best-Match Staffing</p>
-        <div className="mb-3">
-          <select className="select" value={selectedReferral} onChange={e => setSelectedReferral(e.target.value)}>
-            <option value="">Select a referral to match...</option>
-            {referralOptions.map(r => (
-              <option key={r.id} value={r.id}>{r.patientInitials} — {r.serviceType} ({r.urgency})</option>
-            ))}
-          </select>
-        </div>
-
-        {selectedRef && scores.length > 0 && (
-          <div className="space-y-2">
-            {scores.slice(0, 5).map((entry, i) => {
-              const restriction = hasWorkRestriction(entry.staff.id, state.compliance);
-              return (
-                <div key={entry.staff.id} className={`p-3 rounded-lg border ${i === 0 ? 'border-emerald-200 bg-emerald-50/50' : 'border-advisa-border'}`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                        {i + 1}
-                      </span>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-800">{entry.staff.name}</p>
-                        <p className="text-[10px] text-slate-400">{entry.staff.role} · {entry.staff.location} · {entry.staff.todayVisits}/{entry.staff.maxVisits} visits</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-sm font-bold ${entry.score >= 60 ? 'text-emerald-600' : entry.score >= 30 ? 'text-amber-600' : 'text-red-600'}`}>
-                        {entry.score}pts
-                      </span>
-                      {!restriction.restricted && (
-                        <button onClick={() => handleAssignToReferral(entry.staff)} className="btn-primary text-xs py-1 px-2.5">
-                          <Send size={11} /> Assign
-                        </button>
-                      )}
-                    </div>
+        <div className="card-header mb-3"><BarChart3 size={15} /> Staff Overview</div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {state.staff.map(s => {
+            const restriction = hasWorkRestriction(s.id, state.compliance);
+            const loadPct = Math.round((s.todayVisits / s.maxVisits) * 100);
+            return (
+              <div key={s.id} className={`p-3 rounded-lg border ${restriction.restricted ? 'border-red-200 bg-red-50' : 'border-advisa-border bg-white'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">{s.name}</p>
+                    <p className="text-[10px] text-slate-400">{s.role} · {s.location}</p>
                   </div>
-                  {restriction.restricted && (
-                    <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700 flex items-center gap-1">
-                      <AlertTriangle size={11} /> Work restricted: {restriction.reasons.join(', ')}
-                    </div>
-                  )}
-                  {expandedStaff === entry.staff.id ? (
-                    <div>
-                      <ScoreBreakdown score={entry} />
-                      <button onClick={() => setExpandedStaff(null)} className="text-[10px] text-advisa-accent mt-2">Hide breakdown</button>
-                    </div>
-                  ) : (
-                    <button onClick={() => setExpandedStaff(entry.staff.id)} className="text-[10px] text-advisa-accent">Show score breakdown</button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {selectedRef && scores.length === 0 && (
-          <p className="text-xs text-slate-400">No eligible staff found for this referral.</p>
-        )}
-      </div>
-
-      {/* Staff Roster & Heatmap */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="card">
-          <p className="section-title mb-3 flex items-center gap-2"><Users size={13} /> Staff Roster</p>
-          <div className="card p-0 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  <th className="table-head">Name</th>
-                  <th className="table-head">Role</th>
-                  <th className="table-head">Status</th>
-                  <th className="table-head">Shift</th>
-                  <th className="table-head">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.staff.map(s => {
-                  const restriction = hasWorkRestriction(s.id, state.compliance);
-                  return (
-                    <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="table-cell">
-                        <p className="font-semibold text-slate-800">{s.name}</p>
-                        {restriction.restricted && (
-                          <p className="text-[10px] text-red-500 flex items-center gap-1"><AlertTriangle size={9} /> Restricted</p>
-                        )}
-                      </td>
-                      <td className="table-cell"><span className="badge badge-neutral">{s.role}</span></td>
-                      <td className="table-cell">
-                        <span className={`badge ${s.availability === 'Available' ? 'badge-success' : s.availability === 'Partially' ? 'badge-warning' : 'badge-neutral'}`}>
-                          {s.availability}
-                        </span>
-                      </td>
-                      <td className="table-cell">
-                        <span className={`badge ${s.shiftStatus === 'Confirmed' ? 'badge-success' : s.shiftStatus === 'Declined' ? 'badge-urgent' : 'badge-warning'}`}>
-                          {s.shiftStatus}
-                        </span>
-                      </td>
-                      <td className="table-cell">
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => handleToggleAvailability(s.id)} className="text-advisa-accent hover:text-advisa-accent-dark" title="Toggle availability">
-                            {s.availability === 'Available' ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
-                          </button>
-                          {s.shiftStatus !== 'Confirmed' && s.availability !== 'Unavailable' && (
-                            <button onClick={() => handleShiftOffer(s.id)} className="text-xs text-sky-600 hover:text-sky-800" title="Send shift offer">
-                              <Send size={13} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="card">
-          <p className="section-title mb-3 flex items-center gap-2"><BarChart3 size={13} /> Workload Heatmap</p>
-          <div className="space-y-2">
-            {heatmapData.map(item => (
-              <div key={item.name} className="flex items-center gap-3">
-                <span className="text-xs text-slate-600 w-28 truncate">{item.name}</span>
-                <div className="flex-1 h-5 bg-slate-100 rounded-full overflow-hidden relative">
-                  <div
-                    className={`h-full rounded-full transition-all ${item.load >= 90 ? 'bg-red-500' : item.load >= 70 ? 'bg-amber-400' : 'bg-emerald-400'}`}
-                    style={{ width: `${Math.min(item.load, 100)}%` }}
-                  />
-                  <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700">
-                    {item.visits}/{item.max}
+                  <span className={`badge text-[9px] ${s.availability === 'Available' ? 'badge-success' : s.availability === 'Partially' ? 'badge-warning' : 'badge-urgent'}`}>
+                    {s.availability}
                   </span>
                 </div>
-                {item.overtime === 'High' && <AlertTriangle size={12} className="text-red-500 flex-shrink-0" />}
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${loadPct >= 90 ? 'bg-red-400' : loadPct >= 70 ? 'bg-amber-400' : 'bg-emerald-400'}`} style={{ width: `${loadPct}%` }} />
+                  </div>
+                  <span className="text-[10px] text-slate-500">{s.todayVisits}/{s.maxVisits}</span>
+                </div>
+                {restriction.restricted && (
+                  <p className="text-[10px] text-red-600 flex items-center gap-1 mt-1">
+                    <AlertTriangle size={9} /> {restriction.reasons.join(', ')}
+                  </p>
+                )}
+                {s.continuityPatients.length > 0 && (
+                  <p className="text-[10px] text-slate-400 mt-1">Continuity: {s.continuityPatients.join(', ')}</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Unstaffed Referrals */}
+      <div className="card mb-5">
+        <div className="card-header mb-3"><Clock size={15} /> Awaiting Assignment</div>
+        {unstaffedReferrals.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-4">All referrals are staffed</p>
+        ) : (
+          <div className="space-y-2">
+            {unstaffedReferrals.map(r => (
+              <div key={r.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-advisa-border hover:shadow-sm transition-shadow">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">{r.patientInitials}</p>
+                  <p className="text-[10px] text-slate-500">{r.serviceType} · {r.source} · {r.branch}</p>
+                  <span className={`badge text-[9px] ${r.urgency === 'Immediate' ? 'badge-urgent' : r.urgency.includes('Urgent') ? 'badge-warning' : 'badge-neutral'}`}>
+                    {r.urgency}
+                  </span>
+                </div>
+                <button onClick={() => setSelectedReferral(r)} className="btn-primary text-xs">
+                  <UserCheck size={12} /> Find Match
+                </button>
               </div>
             ))}
           </div>
-        </div>
+        )}
       </div>
+
+      {/* Match Drawer */}
+      {selectedReferral && (
+        <div className="fixed inset-0 z-40 flex">
+          <div className="flex-1 bg-black/30" onClick={() => setSelectedReferral(null)} />
+          <div className="w-[460px] bg-white shadow-2xl overflow-y-auto border-l border-advisa-border">
+            <div className="sticky top-0 bg-white border-b border-advisa-border px-5 py-4 flex items-center justify-between z-10">
+              <div>
+                <p className="text-lg font-bold text-slate-800">Match Staff</p>
+                <p className="text-xs text-slate-400">{selectedReferral.patientInitials} · {selectedReferral.serviceType} · {selectedReferral.urgency}</p>
+              </div>
+              <button onClick={() => setSelectedReferral(null)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={18} /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-xs text-slate-500 mb-3">8-factor scoring: Availability, Credentials, Specialty, Location, Workload, Overtime Risk, Continuity of Care, Compliance</p>
+              {scores.map(score => (
+                <StaffMatchCard key={score.staff.id} score={score} referral={selectedReferral} onAssign={() => handleAssign(score)} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,175 +1,410 @@
-import type { Referral, StaffMember, ComplianceItem, FieldVisit, QualityItem, ReferralPartner, AuditEntry, AppState, OASISAssessment, HOPEAssessment, AlertItem } from '../types';
+// ==============================
+// Seed Data — Demo / Fake Data Only — No Real PHI
+// ==============================
 
-// --- Seed Referrals ---
+import type {
+  Referral, StaffMember, ComplianceItem, FieldVisit, QualityItem,
+  OASISAssessment, HOPEAssessment, ReferralPartner, AlertItem, AuditEntry,
+  ShiftBoardEntry, OfflineSyncItem
+} from '../types';
+
+const today = new Date().toISOString().split('T')[0];
+const daysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString().split('T')[0];
+const daysFrom = (n: number) => new Date(Date.now() + n * 86400000).toISOString().split('T')[0];
+const hoursAgo = (n: number) => new Date(Date.now() - n * 3600000).toISOString();
+
 export const seedReferrals: Referral[] = [
-  { id: '1', source: 'Mercy Hospital', patientInitials: 'J.D.', serviceType: 'Home Health', urgency: 'Immediate', dischargeFacility: 'Mercy Main', dischargeDate: '2026-05-18', physicianOrders: 'Missing', insuranceStatus: 'Pending', documentsUploaded: 2, documents: [
-    { name: 'Face Sheet', type: 'Face Sheet', uploaded: true, uploadedAt: '2026-05-17T08:00:00Z' },
-    { name: 'Insurance Card', type: 'Insurance Card', uploaded: true, uploadedAt: '2026-05-17T08:00:00Z' },
-    { name: 'Physician Orders', type: 'Physician Orders', uploaded: false },
-    { name: 'Discharge Summary', type: 'Discharge Summary', uploaded: false },
-    { name: 'Diagnosis/Reason', type: 'Diagnosis/Reason', uploaded: false },
-    { name: 'Contact Info', type: 'Contact Info', uploaded: false },
-  ], assignedCoordinator: 'Sarah L.', assignedOwner: 'Sarah L.', nextFollowUpDate: '2026-05-19', stage: 'Missing Docs', missingItems: ['Physician Orders', 'Discharge Summary'], createdAt: '2026-05-17T08:00:00Z', slaDeadline: '2026-05-20T08:00:00Z', branch: 'Downtown' },
-  { id: '2', source: 'St. Jude Medical', patientInitials: 'M.S.', serviceType: 'Hospice', urgency: 'Urgent 24-48 hours', dischargeFacility: 'St. Jude South', dischargeDate: '2026-05-17', physicianOrders: 'Available', insuranceStatus: 'Verified', documentsUploaded: 5, documents: [
-    { name: 'Face Sheet', type: 'Face Sheet', uploaded: true, uploadedAt: '2026-05-16T10:00:00Z' },
-    { name: 'Insurance Card', type: 'Insurance Card', uploaded: true, uploadedAt: '2026-05-16T10:00:00Z' },
-    { name: 'Physician Orders', type: 'Physician Orders', uploaded: true, uploadedAt: '2026-05-16T10:00:00Z' },
-    { name: 'Discharge Summary', type: 'Discharge Summary', uploaded: true, uploadedAt: '2026-05-16T10:30:00Z' },
-    { name: 'Contact Info', type: 'Contact Info', uploaded: true, uploadedAt: '2026-05-16T10:30:00Z' },
-    { name: 'Diagnosis/Reason', type: 'Diagnosis/Reason', uploaded: false },
-  ], assignedCoordinator: 'Mike R.', assignedOwner: 'Mike R.', nextFollowUpDate: '2026-05-18', stage: 'Scheduled', missingItems: [], createdAt: '2026-05-16T10:30:00Z', slaDeadline: '2026-05-19T10:30:00Z', branch: 'Southside' },
-  { id: '3', source: 'Dr. Smith Clinic', patientInitials: 'R.T.', serviceType: 'Therapy', urgency: 'Routine', dischargeFacility: 'Regional General', dischargeDate: '2026-05-20', physicianOrders: 'Pending', insuranceStatus: 'Verified', documentsUploaded: 3, documents: [
-    { name: 'Face Sheet', type: 'Face Sheet', uploaded: true, uploadedAt: '2026-05-15T14:00:00Z' },
-    { name: 'Insurance Card', type: 'Insurance Card', uploaded: true, uploadedAt: '2026-05-15T14:00:00Z' },
-    { name: 'Contact Info', type: 'Contact Info', uploaded: true, uploadedAt: '2026-05-15T14:20:00Z' },
-    { name: 'Physician Orders', type: 'Physician Orders', uploaded: false },
-    { name: 'Discharge Summary', type: 'Discharge Summary', uploaded: false },
-    { name: 'Diagnosis/Reason', type: 'Diagnosis/Reason', uploaded: false },
-  ], assignedCoordinator: 'Emily T.', assignedOwner: 'Emily T.', nextFollowUpDate: '2026-05-19', stage: 'Eligibility', missingItems: ['Lab Results'], createdAt: '2026-05-15T14:20:00Z', slaDeadline: '2026-05-22T14:20:00Z', branch: 'Eastside' },
-  { id: '4', source: 'Regional Rehab', patientInitials: 'L.K.', serviceType: 'Catastrophic Injury Care', urgency: 'Immediate', dischargeFacility: 'Lakeside Medical', dischargeDate: '2026-05-18', physicianOrders: 'Available', insuranceStatus: 'Pending', documentsUploaded: 4, documents: [
-    { name: 'Face Sheet', type: 'Face Sheet', uploaded: true, uploadedAt: '2026-05-17T16:00:00Z' },
-    { name: 'Insurance Card', type: 'Insurance Card', uploaded: true, uploadedAt: '2026-05-17T16:00:00Z' },
-    { name: 'Physician Orders', type: 'Physician Orders', uploaded: true, uploadedAt: '2026-05-17T16:30:00Z' },
-    { name: 'Discharge Summary', type: 'Discharge Summary', uploaded: true, uploadedAt: '2026-05-17T16:30:00Z' },
-    { name: 'Diagnosis/Reason', type: 'Diagnosis/Reason', uploaded: false },
-    { name: 'Contact Info', type: 'Contact Info', uploaded: false },
-  ], assignedCoordinator: 'James K.', assignedOwner: 'James K.', nextFollowUpDate: '2026-05-19', stage: 'Staffing', missingItems: [], createdAt: '2026-05-17T16:45:00Z', slaDeadline: '2026-05-20T16:45:00Z', branch: 'Westside' },
-  { id: '5', source: 'Attorney Miller', patientInitials: 'P.W.', serviceType: 'Personal Care', urgency: 'Routine', dischargeFacility: 'City Hospital', dischargeDate: '2026-05-22', physicianOrders: 'Available', insuranceStatus: 'Denied', documentsUploaded: 5, documents: [
-    { name: 'Face Sheet', type: 'Face Sheet', uploaded: true, uploadedAt: '2026-05-14T09:00:00Z' },
-    { name: 'Insurance Card', type: 'Insurance Card', uploaded: true, uploadedAt: '2026-05-14T09:00:00Z' },
-    { name: 'Physician Orders', type: 'Physician Orders', uploaded: true, uploadedAt: '2026-05-14T09:00:00Z' },
-    { name: 'Discharge Summary', type: 'Discharge Summary', uploaded: true, uploadedAt: '2026-05-14T09:00:00Z' },
-    { name: 'Contact Info', type: 'Contact Info', uploaded: true, uploadedAt: '2026-05-14T09:00:00Z' },
-    { name: 'Diagnosis/Reason', type: 'Diagnosis/Reason', uploaded: false },
-  ], assignedCoordinator: 'Sarah L.', assignedOwner: 'Sarah L.', nextFollowUpDate: '2026-05-20', stage: 'Declined', missingItems: [], createdAt: '2026-05-14T09:15:00Z', declineReason: 'Insurance denied', lostReason: 'Insurance Denial', slaDeadline: '2026-05-24T09:15:00Z', branch: 'Downtown' },
-  { id: '6', source: 'Lakeside Medical', patientInitials: 'A.B.', serviceType: 'Home Health', urgency: 'Urgent 24-48 hours', dischargeFacility: 'Lakeside Medical', dischargeDate: '2026-05-19', physicianOrders: 'Available', insuranceStatus: 'Verified', documentsUploaded: 4, documents: [
-    { name: 'Face Sheet', type: 'Face Sheet', uploaded: true, uploadedAt: '2026-05-16T11:00:00Z' },
-    { name: 'Insurance Card', type: 'Insurance Card', uploaded: true, uploadedAt: '2026-05-16T11:00:00Z' },
-    { name: 'Physician Orders', type: 'Physician Orders', uploaded: true, uploadedAt: '2026-05-16T11:00:00Z' },
-    { name: 'Discharge Summary', type: 'Discharge Summary', uploaded: true, uploadedAt: '2026-05-16T11:00:00Z' },
-    { name: 'Diagnosis/Reason', type: 'Diagnosis/Reason', uploaded: false },
-    { name: 'Contact Info', type: 'Contact Info', uploaded: false },
-  ], assignedCoordinator: 'Mike R.', assignedOwner: 'Mike R.', nextFollowUpDate: '2026-05-18', stage: 'Started', missingItems: [], createdAt: '2026-05-16T11:00:00Z', slaDeadline: '2026-05-21T11:00:00Z', branch: 'Westside' },
-  { id: '7', source: 'Mercy Hospital', patientInitials: 'C.D.', serviceType: 'Hospice', urgency: 'Immediate', dischargeFacility: 'Mercy Main', dischargeDate: '2026-05-18', physicianOrders: 'Missing', insuranceStatus: 'Verified', documentsUploaded: 1, documents: [
-    { name: 'Face Sheet', type: 'Face Sheet', uploaded: true, uploadedAt: '2026-05-17T07:30:00Z' },
-    { name: 'Insurance Card', type: 'Insurance Card', uploaded: false },
-    { name: 'Physician Orders', type: 'Physician Orders', uploaded: false },
-    { name: 'Discharge Summary', type: 'Discharge Summary', uploaded: false },
-    { name: 'Diagnosis/Reason', type: 'Diagnosis/Reason', uploaded: false },
-    { name: 'Contact Info', type: 'Contact Info', uploaded: false },
-  ], assignedCoordinator: 'Emily T.', assignedOwner: 'Emily T.', nextFollowUpDate: '2026-05-18', stage: 'Missing Docs', missingItems: ['Physician Orders', 'Power of Attorney'], createdAt: '2026-05-17T07:30:00Z', slaDeadline: '2026-05-19T07:30:00Z', branch: 'Downtown' },
-  { id: '8', source: 'St. Jude Medical', patientInitials: 'E.F.', serviceType: 'Therapy', urgency: 'Routine', dischargeFacility: 'St. Jude South', dischargeDate: '2026-05-21', physicianOrders: 'Available', insuranceStatus: 'Verified', documentsUploaded: 5, documents: [
-    { name: 'Face Sheet', type: 'Face Sheet', uploaded: true, uploadedAt: '2026-05-15T13:00:00Z' },
-    { name: 'Insurance Card', type: 'Insurance Card', uploaded: true, uploadedAt: '2026-05-15T13:00:00Z' },
-    { name: 'Physician Orders', type: 'Physician Orders', uploaded: true, uploadedAt: '2026-05-15T13:00:00Z' },
-    { name: 'Discharge Summary', type: 'Discharge Summary', uploaded: true, uploadedAt: '2026-05-15T13:30:00Z' },
-    { name: 'Contact Info', type: 'Contact Info', uploaded: true, uploadedAt: '2026-05-15T13:30:00Z' },
-    { name: 'Diagnosis/Reason', type: 'Diagnosis/Reason', uploaded: false },
-  ], assignedCoordinator: 'James K.', assignedOwner: 'James K.', nextFollowUpDate: '2026-05-20', stage: 'Scheduled', missingItems: [], createdAt: '2026-05-15T13:45:00Z', slaDeadline: '2026-05-23T13:45:00Z', branch: 'Southside' },
+  {
+    id: 'ref1', patientInitials: 'J.D.', serviceType: 'SN', urgency: 'Immediate', source: 'Memorial Hermann', dischargeFacility: 'Memorial Hermann',
+    dischargeDate: daysFrom(2), slaDeadline: daysFrom(0), stage: 'Staffing', assignedOwner: 'Sarah L.',
+    branch: 'Houston North', insuranceStatus: 'Verified', nextFollowUpDate: today,
+    documents: [
+      { type: 'Face-to-Face', uploaded: true, uploadedAt: daysAgo(1) },
+      { type: 'Physician Orders', uploaded: true, uploadedAt: daysAgo(1) },
+      { type: 'Insurance Card', uploaded: true, uploadedAt: daysAgo(2) },
+      { type: 'Discharge Summary', uploaded: true, uploadedAt: daysAgo(1) },
+    ],
+    documentsUploaded: 4, missingItems: 0, physicianOrdersReceived: true,
+    createdAt: hoursAgo(36), recommendedNextAction: 'Assign clinician and schedule SOC visit',
+    readiness: 'Ready for Staffing',
+    timeline: [
+      { date: daysAgo(2), action: 'Referral received', user: 'System', details: 'From Memorial Hermann via fax' },
+      { date: daysAgo(1), action: 'Documents uploaded', user: 'Sarah L.', details: 'All 4 documents received' },
+      { date: daysAgo(1), action: 'Eligibility verified', user: 'Sarah L.', details: 'Insurance verified' },
+      { date: today, action: 'Moved to Staffing', user: 'Sarah L.' },
+    ],
+  },
+  {
+    id: 'ref2', patientInitials: 'M.K.', serviceType: 'PT', urgency: 'Urgent 24-48 hours', source: 'St. Luke\'s', dischargeFacility: 'St. Luke\'s',
+    dischargeDate: daysFrom(5), slaDeadline: daysFrom(2), stage: 'Missing Docs', assignedOwner: 'Sarah L.',
+    branch: 'Houston South', insuranceStatus: 'Pending', nextFollowUpDate: daysFrom(1),
+    documents: [
+      { type: 'Face-to-Face', uploaded: true, uploadedAt: daysAgo(1) },
+      { type: 'Physician Orders', uploaded: false },
+      { type: 'Insurance Card', uploaded: true, uploadedAt: daysAgo(1) },
+      { type: 'Discharge Summary', uploaded: false },
+    ],
+    documentsUploaded: 2, missingItems: 2, physicianOrdersReceived: false,
+    createdAt: hoursAgo(24), recommendedNextAction: 'Collect missing documents: Physician Orders, Discharge Summary',
+    readiness: 'Missing Docs',
+    timeline: [
+      { date: daysAgo(1), action: 'Referral received', user: 'System', details: 'From St. Luke\'s via EMR' },
+      { date: daysAgo(1), action: 'Partial docs uploaded', user: 'Sarah L.' },
+    ],
+  },
+  {
+    id: 'ref3', patientInitials: 'A.R.', serviceType: 'OT', urgency: 'Routine', source: 'Houston Methodist', dischargeFacility: 'Houston Methodist',
+    dischargeDate: daysFrom(10), slaDeadline: daysFrom(7), stage: 'Eligibility', assignedOwner: 'Mike R.',
+    branch: 'Houston North', insuranceStatus: 'Pending', nextFollowUpDate: daysFrom(2),
+    documents: [
+      { type: 'Face-to-Face', uploaded: true, uploadedAt: daysAgo(3) },
+      { type: 'Physician Orders', uploaded: true, uploadedAt: daysAgo(2) },
+      { type: 'Insurance Card', uploaded: true, uploadedAt: daysAgo(3) },
+      { type: 'Discharge Summary', uploaded: true, uploadedAt: daysAgo(2) },
+    ],
+    documentsUploaded: 4, missingItems: 0, physicianOrdersReceived: true,
+    createdAt: hoursAgo(72), recommendedNextAction: 'Verify insurance eligibility',
+    readiness: 'Ready for Eligibility',
+    timeline: [
+      { date: daysAgo(3), action: 'Referral received', user: 'System' },
+      { date: daysAgo(2), action: 'All docs uploaded', user: 'Mike R.' },
+      { date: daysAgo(1), action: 'Eligibility review started', user: 'Mike R.' },
+    ],
+  },
+  {
+    id: 'ref4', patientInitials: 'B.T.', serviceType: 'SN', urgency: 'Immediate', source: 'Memorial Hermann', dischargeFacility: 'Memorial Hermann',
+    dischargeDate: daysFrom(1), slaDeadline: daysAgo(1), stage: 'New', assignedOwner: 'Sarah L.',
+    branch: 'Houston South', insuranceStatus: 'Verified', nextFollowUpDate: today,
+    documents: [
+      { type: 'Face-to-Face', uploaded: false },
+      { type: 'Physician Orders', uploaded: false },
+      { type: 'Insurance Card', uploaded: true, uploadedAt: today },
+      { type: 'Discharge Summary', uploaded: false },
+    ],
+    documentsUploaded: 1, missingItems: 3, physicianOrdersReceived: false,
+    createdAt: hoursAgo(30), recommendedNextAction: 'Collect missing documents: Face-to-Face, Physician Orders, Discharge Summary',
+    readiness: 'Missing Docs',
+    timeline: [
+      { date: daysAgo(1), action: 'Referral received', user: 'System', details: 'URGENT — Immediate' },
+    ],
+  },
+  {
+    id: 'ref5', patientInitials: 'L.H.', serviceType: 'Hospice', urgency: 'Urgent 24-48 hours', source: 'MD Anderson', dischargeFacility: 'MD Anderson',
+    dischargeDate: daysFrom(3), slaDeadline: daysFrom(1), stage: 'Scheduled', assignedOwner: 'Mike R.',
+    branch: 'Houston North', insuranceStatus: 'Verified', nextFollowUpDate: daysFrom(1),
+    documents: [
+      { type: 'Face-to-Face', uploaded: true, uploadedAt: daysAgo(2) },
+      { type: 'Physician Orders', uploaded: true, uploadedAt: daysAgo(2) },
+      { type: 'Insurance Card', uploaded: true, uploadedAt: daysAgo(3) },
+      { type: 'Discharge Summary', uploaded: true, uploadedAt: daysAgo(2) },
+    ],
+    documentsUploaded: 4, missingItems: 0, physicianOrdersReceived: true,
+    createdAt: hoursAgo(96), recommendedNextAction: 'Confirm SOC visit with patient and clinician',
+    readiness: 'Ready for SOC',
+    timeline: [
+      { date: daysAgo(4), action: 'Referral received', user: 'System' },
+      { date: daysAgo(3), action: 'Docs uploaded', user: 'Sarah L.' },
+      { date: daysAgo(2), action: 'Eligibility verified', user: 'Sarah L.' },
+      { date: daysAgo(1), action: 'Staff assigned — Sarah Mitchell', user: 'Mike R.' },
+      { date: today, action: 'SOC visit scheduled', user: 'Mike R.' },
+    ],
+  },
+  {
+    id: 'ref6', patientInitials: 'C.W.', serviceType: 'SN', urgency: 'Routine', source: 'St. Luke\'s', dischargeFacility: 'St. Luke\'s',
+    dischargeDate: daysAgo(3), slaDeadline: daysAgo(2), stage: 'Started', assignedOwner: 'Mike R.',
+    branch: 'Houston South', insuranceStatus: 'Verified', nextFollowUpDate: daysFrom(7),
+    documents: [
+      { type: 'Face-to-Face', uploaded: true, uploadedAt: daysAgo(10) },
+      { type: 'Physician Orders', uploaded: true, uploadedAt: daysAgo(10) },
+      { type: 'Insurance Card', uploaded: true, uploadedAt: daysAgo(10) },
+      { type: 'Discharge Summary', uploaded: true, uploadedAt: daysAgo(10) },
+    ],
+    documentsUploaded: 4, missingItems: 0, physicianOrdersReceived: true,
+    createdAt: hoursAgo(240), recommendedNextAction: 'Monitor case progress',
+    readiness: 'Ready for SOC',
+    timeline: [
+      { date: daysAgo(10), action: 'Referral received', user: 'System' },
+      { date: daysAgo(9), action: 'All docs uploaded', user: 'Sarah L.' },
+      { date: daysAgo(7), action: 'Eligibility verified', user: 'Sarah L.' },
+      { date: daysAgo(5), action: 'Staff assigned', user: 'Mike R.' },
+      { date: daysAgo(3), action: 'SOC visit started', user: 'Sarah Mitchell' },
+    ],
+  },
+  {
+    id: 'ref7', patientInitials: 'R.P.', serviceType: 'PT', urgency: 'Routine', source: 'Houston Methodist', dischargeFacility: 'Houston Methodist',
+    dischargeDate: daysFrom(14), slaDeadline: daysFrom(10), stage: 'New', assignedOwner: 'Sarah L.',
+    branch: 'Houston North', insuranceStatus: 'Pending', nextFollowUpDate: daysFrom(2),
+    documents: [
+      { type: 'Face-to-Face', uploaded: false },
+      { type: 'Physician Orders', uploaded: false },
+      { type: 'Insurance Card', uploaded: false },
+      { type: 'Discharge Summary', uploaded: false },
+    ],
+    documentsUploaded: 0, missingItems: 4, physicianOrdersReceived: false,
+    createdAt: hoursAgo(4), recommendedNextAction: 'Review referral and request missing documents',
+    readiness: 'Missing Docs',
+    timeline: [
+      { date: today, action: 'Referral received', user: 'System', details: 'From Houston Methodist via portal' },
+    ],
+  },
+  {
+    id: 'ref8', patientInitials: 'S.M.', serviceType: 'SN', urgency: 'Urgent 24-48 hours', source: 'Memorial Hermann', dischargeFacility: 'Memorial Hermann',
+    dischargeDate: daysFrom(4), slaDeadline: daysFrom(2), stage: 'Declined', assignedOwner: 'Sarah L.',
+    branch: 'Houston South', insuranceStatus: 'Denied', nextFollowUpDate: today,
+    documents: [
+      { type: 'Face-to-Face', uploaded: true, uploadedAt: daysAgo(5) },
+      { type: 'Physician Orders', uploaded: true, uploadedAt: daysAgo(5) },
+      { type: 'Insurance Card', uploaded: true, uploadedAt: daysAgo(5) },
+      { type: 'Discharge Summary', uploaded: true, uploadedAt: daysAgo(5) },
+    ],
+    documentsUploaded: 4, missingItems: 0, physicianOrdersReceived: true,
+    createdAt: hoursAgo(120),
+    declineReason: 'Insurance denied — out of network',
+    lostReason: 'Insurance Denial',
+    recommendedNextAction: 'Appeal insurance denial or update payer',
+    readiness: 'Ready for Eligibility',
+    timeline: [
+      { date: daysAgo(5), action: 'Referral received', user: 'System' },
+      { date: daysAgo(4), action: 'All docs uploaded', user: 'Sarah L.' },
+      { date: daysAgo(3), action: 'Insurance denied', user: 'Sarah L.' },
+      { date: daysAgo(2), action: 'Referral declined', user: 'Sarah L.', details: 'Insurance denied — out of network' },
+    ],
+  },
 ];
 
-// --- Seed Staff ---
 export const seedStaff: StaffMember[] = [
-  { id: 's1', name: 'Sarah Mitchell', role: 'RN', specialties: ['Hospice', 'Wound Care', 'Home Health'], availability: 'Available', cprExpiry: '2026-08-15', licenseExpiry: '2027-03-01', todayVisits: 4, maxVisits: 8, overtimeRisk: 'Low', location: 'Downtown', phone: '555-0101', shiftStatus: 'Confirmed' },
-  { id: 's2', name: 'James Wilson', role: 'LPN', specialties: ['Personal Care', 'Geriatrics'], availability: 'Available', cprExpiry: '2026-06-30', licenseExpiry: '2026-12-15', todayVisits: 6, maxVisits: 8, overtimeRisk: 'Medium', location: 'Northside', phone: '555-0102', shiftStatus: 'Confirmed' },
-  { id: 's3', name: 'Maria Garcia', role: 'HHA', specialties: ['Hospice', 'Pediatrics'], availability: 'Partially', cprExpiry: '2026-09-20', licenseExpiry: '2027-05-10', todayVisits: 3, maxVisits: 7, overtimeRisk: 'Low', location: 'Westside', phone: '555-0103', shiftStatus: 'Confirmed' },
-  { id: 's4', name: 'Robert Chen', role: 'PT', specialties: ['Therapy', 'Catastrophic Injury'], availability: 'Available', cprExpiry: '2027-01-15', licenseExpiry: '2027-08-20', todayVisits: 5, maxVisits: 8, overtimeRisk: 'Medium', location: 'Eastside', phone: '555-0104', shiftStatus: 'Confirmed' },
-  { id: 's5', name: 'Emily Davis', role: 'RN', specialties: ['Wound Care', 'Vent/Trach', 'SCI'], availability: 'Unavailable', cprExpiry: '2026-05-01', licenseExpiry: '2026-11-30', todayVisits: 0, maxVisits: 8, overtimeRisk: 'Low', location: 'Downtown', phone: '555-0105', shiftStatus: 'Off' },
-  { id: 's6', name: 'Michael Brown', role: 'CNA', specialties: ['Hospice', 'Geriatrics'], availability: 'Available', cprExpiry: '2026-12-01', licenseExpiry: '2027-06-15', todayVisits: 7, maxVisits: 8, overtimeRisk: 'High', location: 'Northside', phone: '555-0106', shiftStatus: 'Confirmed' },
-  { id: 's7', name: 'Lisa Johnson', role: 'OT', specialties: ['Therapy', 'Pediatrics', 'SCI'], availability: 'Available', cprExpiry: '2027-03-10', licenseExpiry: '2027-09-25', todayVisits: 4, maxVisits: 8, overtimeRisk: 'Low', location: 'Westside', phone: '555-0107', shiftStatus: 'Confirmed' },
-  { id: 's8', name: 'David Lee', role: 'ST', specialties: ['Therapy', 'Pediatrics'], availability: 'Partially', cprExpiry: '2026-07-15', licenseExpiry: '2026-10-30', todayVisits: 5, maxVisits: 7, overtimeRisk: 'Medium', location: 'Eastside', phone: '555-0108', shiftStatus: 'Unconfirmed' },
+  { id: 's1', name: 'Sarah Mitchell', role: 'RN', location: 'Houston North', specialty: ['SN', 'Wound Care'], availability: 'Available', todayVisits: 3, maxVisits: 6, shiftStatus: 'Confirmed', certifications: ['RN', 'BLS', 'OASIS'], overtimeRisk: 'Low', continuityPatients: ['J.D.', 'L.H.'] },
+  { id: 's2', name: 'David Chen', role: 'PT', location: 'Houston South', specialty: ['PT', 'Ortho'], availability: 'Available', todayVisits: 4, maxVisits: 6, shiftStatus: 'Confirmed', certifications: ['PT', 'DPT'], overtimeRisk: 'Medium', continuityPatients: ['M.K.'] },
+  { id: 's3', name: 'Maria Garcia', role: 'OT', location: 'Houston North', specialty: ['OT', 'Neuro'], availability: 'Partially', todayVisits: 5, maxVisits: 6, shiftStatus: 'Unconfirmed', certifications: ['OT', 'CHT'], overtimeRisk: 'High', continuityPatients: ['A.R.'] },
+  { id: 's4', name: 'James Wilson', role: 'RN', location: 'Houston South', specialty: ['SN', 'Cardiac'], availability: 'Available', todayVisits: 2, maxVisits: 6, shiftStatus: 'Confirmed', certifications: ['RN', 'ACLS', 'OASIS'], overtimeRisk: 'Low', continuityPatients: [] },
+  { id: 's5', name: 'Emily Brown', role: 'HHA', location: 'Houston North', specialty: ['HHA', 'Personal Care'], availability: 'Unavailable', todayVisits: 0, maxVisits: 8, shiftStatus: 'Declined', certifications: ['CNA', 'HHA'], overtimeRisk: 'Low', continuityPatients: [] },
+  { id: 's6', name: 'Robert Taylor', role: 'RN', location: 'Houston North', specialty: ['SN', 'Hospice'], availability: 'Available', todayVisits: 4, maxVisits: 5, shiftStatus: 'Confirmed', certifications: ['RN', 'CHPN'], overtimeRisk: 'Medium', continuityPatients: ['L.H.'] },
 ];
 
-// --- Seed Compliance ---
 export const seedCompliance: ComplianceItem[] = [
-  { id: 'c1', staffId: 's1', staffName: 'Sarah Mitchell', itemType: 'RN License', status: 'Compliant', expiryDate: '2027-03-01', lastCompleted: '2026-03-01' },
-  { id: 'c2', staffId: 's1', staffName: 'Sarah Mitchell', itemType: 'CPR Certification', status: 'Due Soon', expiryDate: '2026-08-15', lastCompleted: '2025-08-15' },
-  { id: 'c3', staffId: 's5', staffName: 'Emily Davis', itemType: 'RN License', status: 'Due Soon', expiryDate: '2026-11-30', lastCompleted: '2025-11-30' },
-  { id: 'c4', staffId: 's5', staffName: 'Emily Davis', itemType: 'CPR Certification', status: 'Expired', expiryDate: '2026-05-01', lastCompleted: '2025-05-01' },
-  { id: 'c5', staffId: 's2', staffName: 'James Wilson', itemType: 'LPN License', status: 'Due Soon', expiryDate: '2026-12-15', lastCompleted: '2024-12-15' },
-  { id: 'c6', staffId: 's2', staffName: 'James Wilson', itemType: 'CPR Certification', status: 'Critical Soon', expiryDate: '2026-06-10', lastCompleted: '2025-06-10' },
-  { id: 'c7', staffId: 's6', staffName: 'Michael Brown', itemType: 'CNA License', status: 'Compliant', expiryDate: '2027-06-15', lastCompleted: '2026-06-15' },
-  { id: 'c8', staffId: 's6', staffName: 'Michael Brown', itemType: 'CPR Certification', status: 'Compliant', expiryDate: '2026-12-01', lastCompleted: '2025-12-01' },
-  { id: 'c9', staffId: 's1', staffName: 'Sarah Mitchell', itemType: 'Background Check', status: 'Compliant', expiryDate: '2027-01-01', lastCompleted: '2026-01-01' },
-  { id: 'c10', staffId: 's2', staffName: 'James Wilson', itemType: 'Drug Screen', status: 'Compliant', expiryDate: '2026-10-01', lastCompleted: '2026-04-01' },
+  { id: 'c1', staffId: 's1', staffName: 'Sarah Mitchell', itemType: 'RN License', expiryDate: daysFrom(180), lastCompleted: daysAgo(90), status: '' },
+  { id: 'c2', staffId: 's1', staffName: 'Sarah Mitchell', itemType: 'BLS Certification', expiryDate: daysFrom(45), lastCompleted: daysAgo(320), status: '' },
+  { id: 'c3', staffId: 's2', staffName: 'David Chen', itemType: 'PT License', expiryDate: daysFrom(15), lastCompleted: daysAgo(350), status: '' },
+  { id: 'c4', staffId: 's3', staffName: 'Maria Garcia', itemType: 'OT License', expiryDate: daysAgo(5), lastCompleted: daysAgo(370), status: '' },
+  { id: 'c5', staffId: 's4', staffName: 'James Wilson', itemType: 'RN License', expiryDate: daysFrom(200), lastCompleted: daysAgo(60), status: '' },
+  { id: 'c6', staffId: 's4', staffName: 'James Wilson', itemType: 'ACLS Certification', expiryDate: daysFrom(90), lastCompleted: daysAgo(275), status: '' },
+  { id: 'c7', staffId: 's5', staffName: 'Emily Brown', itemType: 'CNA Certification', expiryDate: daysFrom(300), lastCompleted: daysAgo(30), status: '' },
+  { id: 'c8', staffId: 's6', staffName: 'Robert Taylor', itemType: 'RN License', expiryDate: daysFrom(25), lastCompleted: daysAgo(340), status: '' },
+  { id: 'c9', staffId: 's6', staffName: 'Robert Taylor', itemType: 'CHPN Certification', expiryDate: daysFrom(5), lastCompleted: daysAgo(360), status: '' },
+  { id: 'c10', staffId: 's2', staffName: 'David Chen', itemType: 'TB Test', expiryDate: daysAgo(10), lastCompleted: daysAgo(380), status: '' },
 ];
 
-// --- Seed Visits ---
 export const seedVisits: FieldVisit[] = [
-  { id: 'v1', patientInitials: 'J.D.', staffId: 's1', staffName: 'Sarah Mitchell', time: '09:00', address: '123 Main St', serviceType: 'Home Health', checklist: [{ task: 'Vitals Check', completed: true }, { task: 'Medication Review', completed: true }, { task: 'Wound Assessment', completed: false }, { task: 'Patient Education', completed: false }], suppliesNeeded: ['Gloves', 'Bandages', 'Wound Dressings'], documentationStatus: 'Pending', notes: '', visitStatus: 'In Progress', evv: { clockIn: '2026-05-18T09:02:00Z', gpsLatitude: '29.7604', gpsLongitude: '-95.3698', gpsAddress: '123 Main St (GPS verified)', syncStatus: 'Synced' } },
-  { id: 'v2', patientInitials: 'M.S.', staffId: 's1', staffName: 'Sarah Mitchell', time: '11:00', address: '456 Oak Ave', serviceType: 'Hospice', checklist: [{ task: 'Vitals Check', completed: true }, { task: 'Comfort Assessment', completed: true }, { task: 'Family Support', completed: false }, { task: 'Medication Review', completed: true }], suppliesNeeded: ['Gloves', 'Oxygen Tank'], documentationStatus: 'Complete', notes: 'Patient comfortable, family doing well', visitStatus: 'Completed', evv: { clockIn: '2026-05-18T11:01:00Z', clockOut: '2026-05-18T11:58:00Z', gpsLatitude: '29.7500', gpsLongitude: '-95.3600', gpsAddress: '456 Oak Ave (GPS verified)', patientSignature: true, caregiverSignature: true, syncStatus: 'Synced' } },
-  { id: 'v3', patientInitials: 'R.T.', staffId: 's4', staffName: 'Robert Chen', time: '10:00', address: '789 Pine Rd', serviceType: 'Therapy', checklist: [{ task: 'Range of Motion', completed: false }, { task: 'Strength Assessment', completed: false }, { task: 'Home Exercise Plan', completed: false }], suppliesNeeded: ['Therapy Bands', 'Assessment Forms'], documentationStatus: 'Overdue', notes: '', visitStatus: 'Scheduled', evv: { syncStatus: 'Pending' } },
-  { id: 'v4', patientInitials: 'A.B.', staffId: 's2', staffName: 'James Wilson', time: '13:00', address: '321 Elm St', serviceType: 'Home Health', checklist: [{ task: 'Vitals Check', completed: true }, { task: 'Medication Review', completed: true }, { task: 'Wound Assessment', completed: true }], suppliesNeeded: ['Gloves', 'Bandages'], documentationStatus: 'Complete', notes: 'Wound healing well', visitStatus: 'Completed', evv: { clockIn: '2026-05-18T13:00:00Z', clockOut: '2026-05-18T13:45:00Z', gpsLatitude: '29.7650', gpsLongitude: '-95.3750', gpsAddress: '321 Elm St (GPS verified)', patientSignature: true, syncStatus: 'Synced' } },
-  { id: 'v5', patientInitials: 'L.K.', staffId: 's3', staffName: 'Maria Garcia', time: '14:30', address: '654 Maple Dr', serviceType: 'Catastrophic Injury Care', checklist: [{ task: 'Vitals Check', completed: false }, { task: 'Mobility Assessment', completed: false }, { task: 'Equipment Check', completed: false }], suppliesNeeded: ['Gloves', 'Syringes', 'Vent Supplies'], documentationStatus: 'Pending', notes: '', visitStatus: 'Scheduled', evv: { syncStatus: 'Pending' } },
+  {
+    id: 'v1', patientInitials: 'J.D.', address: '123 Main St, Houston, TX 77001', time: '08:00 AM',
+    serviceType: 'SN — Wound Care', visitStatus: 'Scheduled', staffName: 'Sarah Mitchell', acuity: 'High',
+    checklist: [
+      { task: 'Verify patient identity', completed: false },
+      { task: 'Assess wound condition', completed: false },
+      { task: 'Change dressing per orders', completed: false },
+      { task: 'Document vitals', completed: false },
+      { task: 'Patient education on wound care', completed: false },
+    ],
+    evv: { clockIn: null, clockOut: null, gpsLatitude: null, gpsLongitude: null, gpsAddress: '', syncStatus: 'Pending', patientSignature: false, caregiverSignature: false },
+    suppliesNeeded: ['Wound dressing kit', 'Sterile gloves', 'Saline'],
+    notes: '', evvExceptions: [],
+  },
+  {
+    id: 'v2', patientInitials: 'L.H.', address: '456 Oak Ave, Houston, TX 77002', time: '10:30 AM',
+    serviceType: 'Hospice — Comfort Visit', visitStatus: 'Scheduled', staffName: 'Sarah Mitchell', acuity: 'High',
+    checklist: [
+      { task: 'Pain assessment', completed: false },
+      { task: 'Medication reconciliation', completed: false },
+      { task: 'Comfort care plan review', completed: false },
+      { task: 'Family support / education', completed: false },
+    ],
+    evv: { clockIn: null, clockOut: null, gpsLatitude: null, gpsLongitude: null, gpsAddress: '', syncStatus: 'Pending', patientSignature: false, caregiverSignature: false },
+    suppliesNeeded: ['Comfort kit', 'PRN medications'],
+    notes: '', evvExceptions: [],
+  },
+  {
+    id: 'v3', patientInitials: 'A.R.', address: '789 Pine Rd, Houston, TX 77003', time: '01:00 PM',
+    serviceType: 'OT — Neuro Rehab', visitStatus: 'Completed', staffName: 'Maria Garcia', acuity: 'Medium',
+    checklist: [
+      { task: 'Verify patient identity', completed: true },
+      { task: 'Assess ADL performance', completed: true },
+      { task: 'Therapeutic exercises', completed: true },
+      { task: 'Document progress', completed: true },
+    ],
+    evv: { clockIn: hoursAgo(3), clockOut: hoursAgo(2), gpsLatitude: '29.7604', gpsLongitude: '-95.3698', gpsAddress: '789 Pine Rd (GPS verified)', syncStatus: 'Synced', patientSignature: true, caregiverSignature: false },
+    suppliesNeeded: ['Exercise bands'],
+    notes: 'Patient progressing well. Increased independence in ADLs.',
+    evvExceptions: [],
+  },
+  {
+    id: 'v4', patientInitials: 'C.W.', address: '321 Elm Blvd, Houston, TX 77004', time: '03:00 PM',
+    serviceType: 'SN — Cardiac Assessment', visitStatus: 'Missed', staffName: 'James Wilson', acuity: 'High',
+    checklist: [
+      { task: 'Verify patient identity', completed: false },
+      { task: 'Cardiac assessment', completed: false },
+      { task: 'ECG if ordered', completed: false },
+      { task: 'Medication education', completed: false },
+    ],
+    evv: { clockIn: null, clockOut: null, gpsLatitude: null, gpsLongitude: null, gpsAddress: '', syncStatus: 'Failed', patientSignature: false, caregiverSignature: false, exceptionReason: 'Patient not home' },
+    suppliesNeeded: ['ECG kit', 'BP cuff'],
+    notes: '', evvExceptions: [
+      { id: 'exc1', visitId: 'v4', type: 'Missed Clock-In', reason: 'Patient not home — rescheduling required' },
+    ],
+  },
+  {
+    id: 'v5', patientInitials: 'M.K.', address: '555 Cedar Ln, Houston, TX 77005', time: '04:30 PM',
+    serviceType: 'PT — Ortho Rehab', visitStatus: 'Scheduled', staffName: 'David Chen', acuity: 'Medium',
+    checklist: [
+      { task: 'Verify patient identity', completed: false },
+      { task: 'ROM assessment', completed: false },
+      { task: 'Therapeutic exercises', completed: false },
+      { task: 'Gait training', completed: false },
+      { task: 'Home safety assessment', completed: false },
+    ],
+    evv: { clockIn: null, clockOut: null, gpsLatitude: null, gpsLongitude: null, gpsAddress: '', syncStatus: 'Pending', patientSignature: false, caregiverSignature: false },
+    suppliesNeeded: ['Gait belt', 'Exercise bands'],
+    notes: '', evvExceptions: [],
+  },
 ];
 
-// --- Seed Quality ---
 export const seedQuality: QualityItem[] = [
-  { id: 'q1', type: 'OASIS Due', category: 'Home Health', patientInitials: 'A.B.', dueDate: '2026-05-20', status: 'Open', priority: 'High', assignedTo: 'Sarah L.', reviewerName: 'QA Team Lead', reviewDueDate: '2026-05-21' },
-  { id: 'q2', type: 'QA Review', category: 'General QA', patientInitials: 'M.S.', dueDate: '2026-05-19', status: 'In Progress', priority: 'Medium', assignedTo: 'Mike R.', reviewerName: 'QA Team Lead', reviewDueDate: '2026-05-20' },
-  { id: 'q3', type: 'Readmission Follow-up', category: 'Home Health', patientInitials: 'R.T.', dueDate: '2026-05-21', status: 'Open', priority: 'High', assignedTo: 'Emily T.' },
-  { id: 'q4', type: 'Hospice Comfort', category: 'Hospice', patientInitials: 'M.S.', dueDate: '2026-05-18', status: 'Open', priority: 'High', assignedTo: 'Mike R.' },
-  { id: 'q5', type: 'CAHPS Follow-up', category: 'Home Health', patientInitials: 'J.D.', dueDate: '2026-05-25', status: 'Open', priority: 'Medium', assignedTo: 'Sarah L.' },
-  { id: 'q6', type: 'Missed Visit', category: 'General QA', patientInitials: 'R.T.', dueDate: '2026-05-18', status: 'Open', priority: 'High', assignedTo: 'James K.' },
-  { id: 'q7', type: 'Late Note', category: 'General QA', patientInitials: 'L.K.', dueDate: '2026-05-18', status: 'In Progress', priority: 'High', assignedTo: 'James K.' },
+  { id: 'q1', type: 'OASIS Due', category: 'Home Health', patientInitials: 'J.D.', dueDate: daysFrom(2), status: 'Open', priority: 'High', assignedTo: 'Sarah Mitchell', reviewerName: 'Dr. Adams', reviewDueDate: daysFrom(4) },
+  { id: 'q2', type: 'QA Review', category: 'Home Health', patientInitials: 'C.W.', dueDate: daysFrom(5), status: 'In Progress', priority: 'Medium', assignedTo: 'Mike R.', reviewerName: 'Dr. Adams', reviewDueDate: daysFrom(7) },
+  { id: 'q3', type: 'Late Note', category: 'General QA', patientInitials: 'M.K.', dueDate: daysAgo(1), status: 'Open', priority: 'High', assignedTo: 'David Chen' },
+  { id: 'q4', type: 'Readmission Follow-up', category: 'Home Health', patientInitials: 'A.R.', dueDate: daysFrom(3), status: 'Open', priority: 'Medium', assignedTo: 'Maria Garcia' },
+  { id: 'q5', type: 'CAHPS Follow-up', category: 'Home Health', patientInitials: 'L.H.', dueDate: daysFrom(7), status: 'Open', priority: 'Low', assignedTo: 'Sarah L.' },
+  { id: 'q6', type: 'Hospice Comfort', category: 'Hospice', patientInitials: 'L.H.', dueDate: daysAgo(1), status: 'Open', priority: 'High', assignedTo: 'Robert Taylor' },
+  { id: 'q7', type: 'Missed Visit', category: 'General QA', patientInitials: 'C.W.', dueDate: today, status: 'Open', priority: 'High', assignedTo: 'James Wilson' },
+  { id: 'q8', type: 'QA Review', category: 'Home Health', patientInitials: 'R.P.', dueDate: daysFrom(10), status: 'Open', priority: 'Low', assignedTo: 'Sarah L.' },
+  { id: 'q9', type: 'Incident', category: 'General QA', patientInitials: 'A.R.', dueDate: daysAgo(2), status: 'In Progress', priority: 'High', assignedTo: 'Maria Garcia', reviewerName: 'Compliance Admin', reviewDueDate: daysFrom(1) },
+  { id: 'q10', type: 'Late Note', category: 'General QA', patientInitials: 'J.D.', dueDate: daysAgo(3), status: 'Complete', priority: 'Medium', assignedTo: 'Sarah Mitchell' },
 ];
 
-// --- Seed OASIS Assessments ---
 export const seedOASIS: OASISAssessment[] = [
-  { id: 'oa1', patientInitials: 'A.B.', type: 'SOC', dueDate: '2026-05-20', status: 'Due', assignedTo: 'Sarah L.' },
-  { id: 'oa2', patientInitials: 'J.D.', type: 'Recertification', dueDate: '2026-05-22', status: 'Submitted', assignedTo: 'Mike R.' },
-  { id: 'oa3', patientInitials: 'R.T.', type: 'ROC', dueDate: '2026-05-25', status: 'Accepted', assignedTo: 'Emily T.' },
-  { id: 'oa4', patientInitials: 'E.F.', type: 'Discharge', dueDate: '2026-05-19', status: 'Rejected', assignedTo: 'James K.', rejectionReason: 'Missing M1028 field' },
+  { id: 'oa1', patientInitials: 'J.D.', type: 'SOC', dueDate: daysFrom(2), assignedTo: 'Sarah Mitchell', status: 'Due' },
+  { id: 'oa2', patientInitials: 'C.W.', type: 'Recertification', dueDate: daysAgo(1), assignedTo: 'James Wilson', status: 'Due' },
+  { id: 'oa3', patientInitials: 'A.R.', type: 'ROC', dueDate: daysFrom(5), assignedTo: 'Maria Garcia', status: 'Submitted' },
+  { id: 'oa4', patientInitials: 'M.K.', type: 'SOC', dueDate: daysFrom(7), assignedTo: 'David Chen', status: 'Due' },
+  { id: 'oa5', patientInitials: 'R.P.', type: 'SOC', dueDate: daysFrom(14), assignedTo: 'Sarah Mitchell', status: 'Due' },
+  { id: 'oa6', patientInitials: 'B.T.', type: 'Discharge', dueDate: daysAgo(3), assignedTo: 'Sarah Mitchell', status: 'Rejected', rejectionReason: 'Missing M1028 — Active Diagnosis' },
+  { id: 'oa7', patientInitials: 'L.H.', type: 'SOC', dueDate: daysAgo(2), assignedTo: 'Robert Taylor', status: 'Accepted' },
+  { id: 'oa8', patientInitials: 'C.W.', type: 'ROC', dueDate: daysFrom(3), assignedTo: 'James Wilson', status: 'Accepted' },
 ];
 
-// --- Seed HOPE Assessments ---
 export const seedHOPE: HOPEAssessment[] = [
-  { id: 'ho1', patientInitials: 'M.S.', type: 'HOPE Admission', dueDate: '2026-05-17', status: 'Accepted', iqiesStatus: 'Accepted', assignedTo: 'Mike R.' },
-  { id: 'ho2', patientInitials: 'M.S.', type: 'HOPE Update Visit 1', dueDate: '2026-05-24', status: 'Due', iqiesStatus: 'Not Submitted', assignedTo: 'Mike R.' },
-  { id: 'ho3', patientInitials: 'C.D.', type: 'HOPE Admission', dueDate: '2026-05-19', status: 'Due', iqiesStatus: 'Not Submitted', assignedTo: 'Emily T.' },
-  { id: 'ho4', patientInitials: 'M.S.', type: 'HOPE Update Visit 2', dueDate: '2026-05-31', status: 'Due', iqiesStatus: 'Not Submitted', assignedTo: 'Mike R.' },
+  { id: 'ha1', patientInitials: 'L.H.', type: 'HOPE Admission', dueDate: daysAgo(2), assignedTo: 'Robert Taylor', status: 'Accepted', iqiesStatus: 'Accepted' },
+  { id: 'ha2', patientInitials: 'L.H.', type: 'HOPE Update Visit 1', dueDate: daysFrom(14), assignedTo: 'Robert Taylor', status: 'Due', iqiesStatus: 'Pending' },
+  { id: 'ha3', patientInitials: 'L.H.', type: 'HOPE Update Visit 2', dueDate: daysFrom(28), assignedTo: 'Robert Taylor', status: 'Due', iqiesStatus: 'Pending' },
+  { id: 'ha4', patientInitials: 'L.H.', type: 'HOPE Discharge', dueDate: daysFrom(90), assignedTo: 'Robert Taylor', status: 'Due', iqiesStatus: 'Pending' },
 ];
 
-// --- Seed Partners ---
 export const seedPartners: ReferralPartner[] = [
-  { id: 'p1', name: 'Mercy Hospital', type: 'Hospital', volume: 45, acceptedReferrals: 38, declinedReferrals: 7, avgTimeToSOC: '2.1 days', lostReasons: ['Insurance Denial', 'Staff Shortage'], lastFollowUp: '2026-05-15', nextFollowUpReminder: '2026-05-22', notes: 'Excellent relationship, fast discharge process', contactName: 'Dr. Anderson', contactEmail: 'd.anderson@mercy.com', contactPhone: '555-1001', timeline: [{ date: '2026-05-15', action: 'Quarterly review meeting', user: 'Sarah L.' }, { date: '2026-05-01', action: 'New contact introduced', user: 'VP User' }] },
-  { id: 'p2', name: 'St. Jude Medical', type: 'Hospital', volume: 38, acceptedReferrals: 35, declinedReferrals: 3, avgTimeToSOC: '2.8 days', lostReasons: ['Patient Declined'], lastFollowUp: '2026-05-16', nextFollowUpReminder: '2026-05-23', notes: 'Consistent volume, good communication', contactName: 'Lisa Thompson', contactEmail: 'l.thompson@stjude.com', contactPhone: '555-1002', timeline: [{ date: '2026-05-16', action: 'Follow-up call', user: 'Mike R.' }] },
-  { id: 'p3', name: 'Dr. Smith Clinic', type: 'Physician', volume: 12, acceptedReferrals: 12, declinedReferrals: 0, avgTimeToSOC: '1.5 days', lostReasons: [], lastFollowUp: '2026-05-17', nextFollowUpReminder: '2026-05-24', notes: 'Primary care, quick referrals', contactName: 'Dr. Smith', contactEmail: 'j.smith@smithclinic.com', contactPhone: '555-1003', timeline: [{ date: '2026-05-17', action: 'Email check-in', user: 'Emily T.' }] },
-  { id: 'p4', name: 'Regional Rehab', type: 'Hospital', volume: 22, acceptedReferrals: 18, declinedReferrals: 4, avgTimeToSOC: '3.2 days', lostReasons: ['Service Not Available'], lastFollowUp: '2026-05-14', nextFollowUpReminder: '2026-05-21', notes: 'Specializes in catastrophic injury', contactName: 'Mark Davis', contactEmail: 'm.davis@regionalrehab.com', contactPhone: '555-1004', timeline: [{ date: '2026-05-14', action: 'On-site visit', user: 'James K.' }] },
-  { id: 'p5', name: 'Attorney Miller', type: 'Attorney', volume: 8, acceptedReferrals: 5, declinedReferrals: 3, avgTimeToSOC: '4.5 days', lostReasons: ['Insurance Denial'], lastFollowUp: '2026-05-10', nextFollowUpReminder: '2026-05-17', notes: 'Legal cases, personal injury', contactName: 'John Miller', contactEmail: 'j.miller@millerlaw.com', contactPhone: '555-1005', timeline: [{ date: '2026-05-10', action: 'Case review call', user: 'Sarah L.' }] },
+  {
+    id: 'p1', name: 'Memorial Hermann', type: 'Hospital', volume: 18, acceptedReferrals: 14, declinedReferrals: 2, avgTimeToSOC: '3.2 days',
+    lostReasons: ['Insurance Denial', 'Patient Declined'], lastFollowUp: daysAgo(2), nextFollowUpReminder: daysFrom(5), notes: 'Top referral source. Strong relationship with discharge planning team.',
+    contactName: 'Jennifer Adams', contactEmail: 'j.adams@memorialhermann.demo', contactPhone: '(713) 555-0101',
+    timeline: [
+      { date: daysAgo(30), action: 'Partnership renewed', user: 'VP User' },
+      { date: daysAgo(14), action: 'Monthly review meeting', user: 'VP User' },
+      { date: daysAgo(2), action: 'Follow-up completed', user: 'Sarah L.' },
+    ],
+    trends: [
+      { period: '30d', volume: 18, accepted: 14, declined: 2 },
+      { period: '60d', volume: 15, accepted: 12, declined: 1 },
+      { period: '90d', volume: 12, accepted: 10, declined: 1 },
+    ],
+    relationshipOwner: 'VP User', riskLabel: 'Growing',
+  },
+  {
+    id: 'p2', name: 'St. Luke\'s', type: 'Hospital', volume: 12, acceptedReferrals: 8, declinedReferrals: 3, avgTimeToSOC: '4.1 days',
+    lostReasons: ['Coverage Area', 'Insurance Denial', 'Staffing'], lastFollowUp: daysAgo(7), nextFollowUpReminder: today, notes: 'Moderate volume. Working on improving conversion rate.',
+    contactName: 'Robert Kim', contactEmail: 'r.kim@stlukes.demo', contactPhone: '(713) 555-0202',
+    timeline: [
+      { date: daysAgo(30), action: 'QBR completed', user: 'VP User' },
+      { date: daysAgo(7), action: 'Follow-up completed', user: 'Sarah L.' },
+    ],
+    trends: [
+      { period: '30d', volume: 12, accepted: 8, declined: 3 },
+      { period: '60d', volume: 14, accepted: 10, declined: 2 },
+      { period: '90d', volume: 16, accepted: 13, declined: 1 },
+    ],
+    relationshipOwner: 'Sarah L.', riskLabel: 'Needs Attention',
+  },
+  {
+    id: 'p3', name: 'Houston Methodist', type: 'Hospital', volume: 8, acceptedReferrals: 6, declinedReferrals: 1, avgTimeToSOC: '2.8 days',
+    lostReasons: ['Patient Declined'], lastFollowUp: daysAgo(5), nextFollowUpReminder: daysFrom(2), notes: 'Growing relationship. Fast SOC times.',
+    contactName: 'Lisa Park', contactEmail: 'l.park@methodist.demo', contactPhone: '(713) 555-0303',
+    timeline: [
+      { date: daysAgo(21), action: 'Initial outreach meeting', user: 'VP User' },
+      { date: daysAgo(5), action: 'Follow-up completed', user: 'Mike R.' },
+    ],
+    trends: [
+      { period: '30d', volume: 8, accepted: 6, declined: 1 },
+      { period: '60d', volume: 5, accepted: 4, declined: 0 },
+      { period: '90d', volume: 3, accepted: 2, declined: 0 },
+    ],
+    relationshipOwner: 'VP User', riskLabel: 'Growing',
+  },
+  {
+    id: 'p4', name: 'MD Anderson', type: 'Hospital', volume: 4, acceptedReferrals: 4, declinedReferrals: 0, avgTimeToSOC: '2.5 days',
+    lostReasons: [], lastFollowUp: daysAgo(3), nextFollowUpReminder: daysFrom(4), notes: 'Hospice-focused referrals. 100% conversion.',
+    contactName: 'Dr. James Lee', contactEmail: 'j.lee@mdanderson.demo', contactPhone: '(713) 555-0404',
+    timeline: [
+      { date: daysAgo(15), action: 'Partnership established', user: 'VP User' },
+      { date: daysAgo(3), action: 'Follow-up completed', user: 'VP User' },
+    ],
+    trends: [
+      { period: '30d', volume: 4, accepted: 4, declined: 0 },
+      { period: '60d', volume: 3, accepted: 3, declined: 0 },
+      { period: '90d', volume: 2, accepted: 2, declined: 0 },
+    ],
+    relationshipOwner: 'VP User', riskLabel: 'Growing',
+  },
+  {
+    id: 'p5', name: 'Dr. Martinez', type: 'Physician', volume: 2, acceptedReferrals: 1, declinedReferrals: 1, avgTimeToSOC: '5.0 days',
+    lostReasons: ['Staffing'], lastFollowUp: daysAgo(14), nextFollowUpReminder: daysAgo(1), notes: 'Low volume. Needs re-engagement.',
+    contactName: 'Dr. Ana Martinez', contactEmail: 'a.martinez@clinic.demo', contactPhone: '(713) 555-0505',
+    timeline: [
+      { date: daysAgo(30), action: 'Initial contact', user: 'Sarah L.' },
+      { date: daysAgo(14), action: 'Follow-up completed', user: 'Sarah L.' },
+    ],
+    trends: [
+      { period: '30d', volume: 2, accepted: 1, declined: 1 },
+      { period: '60d', volume: 4, accepted: 3, declined: 0 },
+      { period: '90d', volume: 5, accepted: 4, declined: 0 },
+    ],
+    relationshipOwner: 'Sarah L.', riskLabel: 'At Risk',
+  },
 ];
 
-// --- Seed Audit Log ---
-export const seedAuditLog: AuditEntry[] = [
-  { id: 'a1', timestamp: '2026-05-18T05:30:00Z', user: 'Sarah L.', role: 'Intake Coordinator', action: 'Created', recordType: 'Referral', recordId: '1', details: 'New referral J.D. from Mercy Hospital' },
-  { id: 'a2', timestamp: '2026-05-18T05:45:00Z', user: 'Mike R.', role: 'Scheduler', action: 'Updated', recordType: 'Referral', recordId: '2', details: 'Stage changed to Scheduled', before: 'Staffing', after: 'Scheduled' },
-  { id: 'a3', timestamp: '2026-05-18T06:00:00Z', user: 'Sarah Mitchell', role: 'Field Staff', action: 'Updated', recordType: 'Quality', recordId: 'q2', details: 'QA Review for M.S. completed' },
-  { id: 'a4', timestamp: '2026-05-17T14:20:00Z', user: 'Emily T.', role: 'Intake Coordinator', action: 'Updated', recordType: 'Referral', recordId: '3', details: 'Updated insurance status to Verified', before: 'Pending', after: 'Verified' },
-  { id: 'a5', timestamp: '2026-05-17T16:45:00Z', user: 'James K.', role: 'Intake Coordinator', action: 'Created', recordType: 'Referral', recordId: '4', details: 'New referral L.K. from Regional Rehab' },
-];
-
-// --- Seed Alerts ---
 export const seedAlerts: AlertItem[] = [
-  { id: 'al1', type: 'compliance', severity: 'critical', title: 'CPR Certification Expired', details: 'Emily Davis — CPR Certification expired on 2026-05-01. Work restriction in effect.', timestamp: '2026-05-18T06:00:00Z', acknowledged: false, sourceRecordType: 'Compliance', sourceRecordId: 'c4' },
-  { id: 'al2', type: 'sla', severity: 'high', title: 'SLA Breach Risk', details: 'Referral J.D. (Mercy Hospital) — Immediate urgency, SLA deadline approaching in 2 days.', timestamp: '2026-05-18T06:00:00Z', acknowledged: false, sourceRecordType: 'Referral', sourceRecordId: '1' },
+  { id: 'al1', type: 'expired_credential', severity: 'critical', title: 'Expired: Maria Garcia — OT License', details: 'OT License expired 5 days ago. Maria Garcia cannot be assigned to visits.', timestamp: hoursAgo(5), acknowledged: false, sourceRecordType: 'Compliance', sourceRecordId: 'c4', owner: 'Compliance Admin' },
+  { id: 'al2', type: 'expired_credential', severity: 'critical', title: 'Expired: David Chen — TB Test', details: 'TB Test expired 10 days ago. David Chen cannot be assigned to visits.', timestamp: hoursAgo(10), acknowledged: false, sourceRecordType: 'Compliance', sourceRecordId: 'c10', owner: 'Compliance Admin' },
+  { id: 'al3', type: 'critical_soon_credential', severity: 'high', title: 'Expiring Soon: Robert Taylor — CHPN', details: 'CHPN Certification expires in 5 days.', timestamp: hoursAgo(12), acknowledged: false, sourceRecordType: 'Compliance', sourceRecordId: 'c9', owner: 'Compliance Admin' },
+  { id: 'al4', type: 'sla_breach', severity: 'critical', title: 'SLA Breach: B.T. — SN', details: 'SLA deadline overdue by 1 day. Immediate action required.', timestamp: hoursAgo(24), acknowledged: false, sourceRecordType: 'Referral', sourceRecordId: 'ref4', owner: 'Sarah L.' },
+  { id: 'al5', type: 'sla_risk', severity: 'high', title: 'SLA Risk: J.D. — SN', details: 'SLA deadline is today. Staff assignment needed.', timestamp: hoursAgo(2), acknowledged: false, sourceRecordType: 'Referral', sourceRecordId: 'ref1', owner: 'Sarah L.' },
+  { id: 'al6', type: 'late_note', severity: 'medium', title: 'Late Note: M.K. — David Chen', details: 'Documentation note overdue by 1 day.', timestamp: hoursAgo(26), acknowledged: false, sourceRecordType: 'Quality', sourceRecordId: 'q3', owner: 'David Chen' },
+  { id: 'al7', type: 'uncovered_high_acuity', severity: 'critical', title: 'Uncovered: J.D. — Immediate SN', details: 'High-acuity immediate patient J.D. in Staffing stage without assigned clinician.', timestamp: hoursAgo(3), acknowledged: false, sourceRecordType: 'Referral', sourceRecordId: 'ref1', owner: 'Mike R.' },
+  { id: 'al8', type: 'incident', severity: 'high', title: 'Incident: A.R. — Fall Risk', details: 'Incident report filed by Maria Garcia. Under review.', timestamp: hoursAgo(48), acknowledged: true, acknowledgedBy: 'Compliance Admin', acknowledgedAt: hoursAgo(46), sourceRecordType: 'Quality', sourceRecordId: 'q9', owner: 'Maria Garcia' },
+  { id: 'al9', type: 'late_note', severity: 'medium', title: 'Late Note: J.D. — Sarah Mitchell', details: 'Documentation note overdue by 3 days. Now resolved.', timestamp: hoursAgo(72), acknowledged: true, acknowledgedBy: 'Sarah Mitchell', acknowledgedAt: hoursAgo(70), sourceRecordType: 'Quality', sourceRecordId: 'q10', owner: 'Sarah Mitchell' },
+  { id: 'al10', type: 'sla_risk', severity: 'high', title: 'SLA Risk: L.H. — Hospice', details: 'SLA deadline in 1 day. SOC visit scheduled.', timestamp: hoursAgo(6), acknowledged: false, sourceRecordType: 'Referral', sourceRecordId: 'ref5', owner: 'Mike R.' },
 ];
 
-// --- Initial State ---
-export const initialUser = { name: 'VP User', role: 'VP' as const };
+export const seedShiftBoard: ShiftBoardEntry[] = [
+  { id: 'sb1', referralId: 'ref1', patientInitials: 'J.D.', serviceType: 'SN', acuity: 'High', neededRole: 'RN', deadline: daysFrom(0), status: 'Open' },
+  { id: 'sb2', referralId: 'ref4', patientInitials: 'B.T.', serviceType: 'SN', acuity: 'High', neededRole: 'RN', deadline: daysAgo(1), status: 'Open' },
+];
 
-export function getInitialState(): AppState {
-  return {
-    referrals: seedReferrals,
-    staff: seedStaff,
-    compliance: seedCompliance,
-    visits: seedVisits,
-    quality: seedQuality,
-    oasisAssessments: seedOASIS,
-    hopeAssessments: seedHOPE,
-    partners: seedPartners,
-    auditLog: seedAuditLog,
-    alerts: seedAlerts,
-    currentUser: initialUser,
-    lastRefreshed: new Date().toISOString(),
-  };
-}
+export const seedOfflineSync: OfflineSyncItem[] = [
+  { id: 'os1', visitId: 'v4', patientInitials: 'C.W.', action: 'EVV data sync', status: 'Failed', queuedAt: hoursAgo(2), retryCount: 3 },
+  { id: 'os2', visitId: 'v1', patientInitials: 'J.D.', action: 'Checklist update', status: 'Pending', queuedAt: hoursAgo(0.5), retryCount: 0 },
+];
+
+export const seedAuditLog: AuditEntry[] = [
+  { id: 'audit1', timestamp: hoursAgo(48), user: 'Sarah L.', role: 'Intake Coordinator', action: 'Created', recordType: 'Referral', recordId: 'ref1', details: 'New referral J.D. from Memorial Hermann' },
+  { id: 'audit2', timestamp: hoursAgo(36), user: 'Sarah L.', role: 'Intake Coordinator', action: 'Updated', recordType: 'Referral', recordId: 'ref1', details: 'Uploaded all documents for J.D.', before: '0 docs', after: '4 docs' },
+  { id: 'audit3', timestamp: hoursAgo(24), user: 'Sarah L.', role: 'Intake Coordinator', action: 'Updated', recordType: 'Referral', recordId: 'ref1', details: 'Stage changed to Staffing for J.D.', before: 'Eligibility', after: 'Staffing' },
+  { id: 'audit4', timestamp: hoursAgo(48), user: 'Maria Garcia', role: 'Field Staff', action: 'Created', recordType: 'Quality', recordId: 'q9', details: 'Incident reported for A.R.' },
+  { id: 'audit5', timestamp: hoursAgo(46), user: 'Compliance Admin', role: 'Compliance Admin', action: 'Updated', recordType: 'Alert', recordId: 'al8', details: 'Acknowledged incident alert for A.R.' },
+  { id: 'audit6', timestamp: hoursAgo(12), user: 'VP User', role: 'VP', action: 'Viewed', recordType: 'Dashboard', recordId: 'dashboard', details: 'VP accessed executive dashboard' },
+];

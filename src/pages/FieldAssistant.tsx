@@ -1,372 +1,459 @@
 import { useAppState } from '../context/AppContext';
 import { useState } from 'react';
-import type { FieldVisit, QualityItem } from '../types';
+import type { FieldVisit, EVVExceptionType, OfflineSyncItem } from '../types';
 import {
-  Smartphone, MapPin, Clock, CheckCircle, Play, Square,
-  Wifi, WifiOff, MessageSquare, AlertTriangle, FileText, Navigation,
-  Save, Send, Menu, X
+  Smartphone, MapPin, CheckCircle, XCircle, AlertTriangle,
+  Navigation, Wifi, WifiOff, Play, Square, ChevronDown,
+  ChevronUp, RotateCcw
 } from 'lucide-react';
 
-function EVVPanel({ visit, onUpdate }: { visit: FieldVisit; onUpdate: (updates: Partial<FieldVisit>) => void }) {
-  const evv = visit.evv;
-  const isClocked = !!evv.clockIn && !evv.clockOut;
+const evvExceptionTypes: EVVExceptionType[] = ['GPS Mismatch', 'Missed Clock-In', 'Late Clock-Out', 'No Signature', 'Offline Sync'];
+
+function VisitCard({ visit, onStartVisit, onEndVisit, onChecklistToggle, onAddException }: {
+  visit: FieldVisit;
+  onStartVisit: (id: string) => void;
+  onEndVisit: (id: string) => void;
+  onChecklistToggle: (visitId: string, taskIndex: number, completed: boolean) => void;
+  onAddException: (visitId: string, type: EVVExceptionType, reason: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [showExceptionForm, setShowExceptionForm] = useState(false);
+  const [exceptionType, setExceptionType] = useState<EVVExceptionType>('GPS Mismatch');
+  const [exceptionReason, setExceptionReason] = useState('');
+
+  const completedTasks = visit.checklist.filter(t => t.completed).length;
+  const allCompleted = completedTasks === visit.checklist.length;
+  const hasSignature = visit.evv.patientSignature || visit.evv.caregiverSignature;
+
+  const statusColor = visit.visitStatus === 'Completed' ? 'border-emerald-200 bg-emerald-50'
+    : visit.visitStatus === 'In Progress' ? 'border-sky-200 bg-sky-50'
+    : visit.visitStatus === 'Missed' ? 'border-red-200 bg-red-50'
+    : 'border-advisa-border bg-white';
+
+  const handleEndVisit = () => {
+    if (!allCompleted) {
+      // Cannot end without required checklist
+      return;
+    }
+    if (!hasSignature) {
+      // Require exception if no signature
+      setShowExceptionForm(true);
+      setExceptionType('No Signature');
+      return;
+    }
+    onEndVisit(visit.id);
+  };
+
+  const handleSubmitException = () => {
+    if (exceptionReason.trim()) {
+      onAddException(visit.id, exceptionType, exceptionReason);
+      setShowExceptionForm(false);
+      setExceptionReason('');
+      // If this was a "No Signature" exception during end-visit, also end the visit
+      if (exceptionType === 'No Signature') {
+        onEndVisit(visit.id);
+      }
+    }
+  };
 
   return (
-    <div className="p-3 bg-slate-50 rounded-lg border border-advisa-border">
-      <p className="text-xs font-semibold text-slate-700 mb-2 flex items-center gap-2">
-        <Clock size={12} /> Electronic Visit Verification (EVV)
-      </p>
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        <div>
-          <p className="text-slate-500">Clock In</p>
-          <p className="font-mono text-slate-700">{evv.clockIn ? new Date(evv.clockIn).toLocaleTimeString() : '—'}</p>
+    <div className={`rounded-xl border-2 shadow-sm transition-all ${statusColor}`} data-testid="visit-card">
+      {/* Card Header */}
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${visit.acuity === 'High' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+              {visit.patientInitials.split('.')[0]}
+            </div>
+            <div>
+              <p className="text-base font-bold text-slate-800">{visit.patientInitials}</p>
+              <p className="text-xs text-slate-500">{visit.serviceType}</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className={`badge text-xs ${visit.visitStatus === 'Completed' ? 'badge-success' : visit.visitStatus === 'In Progress' ? 'badge-info' : visit.visitStatus === 'Missed' ? 'badge-urgent' : 'badge-neutral'}`}>
+              {visit.visitStatus}
+            </span>
+            <p className="text-xs text-slate-400 mt-1">{visit.time}</p>
+          </div>
         </div>
-        <div>
-          <p className="text-slate-500">Clock Out</p>
-          <p className="font-mono text-slate-700">{evv.clockOut ? new Date(evv.clockOut).toLocaleTimeString() : '—'}</p>
+
+        {/* Address */}
+        <div className="flex items-center gap-2 text-xs text-slate-600 mb-3">
+          <MapPin size={12} className="text-slate-400 flex-shrink-0" />
+          <span>{visit.address}</span>
         </div>
-        <div>
-          <p className="text-slate-500">GPS Location</p>
-          <p className="font-mono text-slate-700 text-[10px]">{evv.gpsAddress || 'Not captured'}</p>
-        </div>
-        <div>
-          <p className="text-slate-500">Sync Status</p>
-          <span className={`badge ${evv.syncStatus === 'Synced' ? 'badge-success' : evv.syncStatus === 'Failed' ? 'badge-urgent' : 'badge-warning'}`}>
-            {evv.syncStatus}
+
+        {/* Acuity + EVV Status */}
+        <div className="flex items-center gap-2 mb-3">
+          <span className={`badge text-[10px] ${visit.acuity === 'High' ? 'badge-urgent' : 'badge-warning'}`}>
+            {visit.acuity} Acuity
           </span>
+          <span className={`badge text-[10px] ${visit.evv.syncStatus === 'Synced' ? 'badge-success' : visit.evv.syncStatus === 'Failed' ? 'badge-urgent' : 'badge-warning'}`}>
+            {visit.evv.syncStatus === 'Synced' ? <Wifi size={8} /> : <WifiOff size={8} />}
+            EVV: {visit.evv.syncStatus}
+          </span>
+          {visit.evvExceptions.length > 0 && (
+            <span className="badge badge-warning text-[10px]">{visit.evvExceptions.length} exception{visit.evvExceptions.length > 1 ? 's' : ''}</span>
+          )}
         </div>
-        <div>
-          <p className="text-slate-500">Patient Signature</p>
-          <p className="text-slate-700">{evv.patientSignature ? '✓ Captured' : '⬜ Placeholder'}</p>
+
+        {/* Checklist Progress */}
+        <div className="mb-3">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] text-slate-500">Checklist {completedTasks}/{visit.checklist.length}</span>
+            <span className="text-[10px] text-slate-400">{Math.round((completedTasks / visit.checklist.length) * 100)}%</span>
+          </div>
+          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-full bg-advisa-accent rounded-full transition-all" style={{ width: `${(completedTasks / visit.checklist.length) * 100}%` }} />
+          </div>
         </div>
-        <div>
-          <p className="text-slate-500">Caregiver Signature</p>
-          <p className="text-slate-700">{evv.caregiverSignature ? '✓ Captured' : '⬜ Placeholder'}</p>
+
+        {/* Actions */}
+        <div className="flex items-center gap-2">
+          {visit.visitStatus === 'Scheduled' && (
+            <button onClick={() => onStartVisit(visit.id)} className="btn-primary text-sm flex-1">
+              <Play size={14} /> Start Visit
+            </button>
+          )}
+          {visit.visitStatus === 'In Progress' && (
+            <button
+              onClick={handleEndVisit}
+              disabled={!allCompleted}
+              className={`text-sm flex-1 ${allCompleted ? 'btn-primary bg-emerald-600 hover:bg-emerald-700' : 'btn-secondary opacity-50 cursor-not-allowed'}`}
+              title={!allCompleted ? 'Complete all checklist items before ending visit' : undefined}
+            >
+              <Square size={14} /> End Visit
+            </button>
+          )}
+          <button onClick={() => setExpanded(!expanded)} className="btn-secondary p-2">
+            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
         </div>
+        {visit.visitStatus === 'In Progress' && !allCompleted && (
+          <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
+            <AlertTriangle size={9} /> Complete all checklist items to end visit
+          </p>
+        )}
       </div>
-      {evv.exceptionReason && (
-        <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
-          Exception: {evv.exceptionReason}
+
+      {/* Expanded Details */}
+      {expanded && (
+        <div className="border-t border-advisa-border p-4 space-y-4">
+          {/* Checklist */}
+          <div>
+            <p className="text-xs font-semibold text-slate-700 mb-2">Checklist</p>
+            <div className="space-y-1.5">
+              {visit.checklist.map((task, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => onChecklistToggle(visit.id, idx, !task.completed)}
+                  className={`w-full flex items-center gap-2 p-2 rounded-lg text-xs text-left transition-colors ${task.completed ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+                >
+                  {task.completed ? <CheckCircle size={13} className="text-emerald-500 flex-shrink-0" /> : <XCircle size={13} className="text-slate-300 flex-shrink-0" />}
+                  <span className={task.completed ? 'line-through' : ''}>{task.task}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Supplies */}
+          {visit.suppliesNeeded.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-slate-700 mb-2">Supplies Needed</p>
+              <div className="flex flex-wrap gap-1.5">
+                {visit.suppliesNeeded.map(s => (
+                  <span key={s} className="badge badge-info text-[10px]">{s}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* EVV Details */}
+          <div>
+            <p className="text-xs font-semibold text-slate-700 mb-2">EVV Details</p>
+            <div className="grid grid-cols-2 gap-2 text-[10px]">
+              <div className="p-2 bg-slate-50 rounded">
+                <span className="text-slate-400">Clock In:</span>
+                <p className="font-semibold">{visit.evv.clockIn ? new Date(visit.evv.clockIn).toLocaleTimeString() : '—'}</p>
+              </div>
+              <div className="p-2 bg-slate-50 rounded">
+                <span className="text-slate-400">Clock Out:</span>
+                <p className="font-semibold">{visit.evv.clockOut ? new Date(visit.evv.clockOut).toLocaleTimeString() : '—'}</p>
+              </div>
+              <div className="p-2 bg-slate-50 rounded">
+                <span className="text-slate-400">GPS:</span>
+                <p className="font-semibold">{visit.evv.gpsAddress || '—'}</p>
+              </div>
+              <div className="p-2 bg-slate-50 rounded">
+                <span className="text-slate-400">Signatures:</span>
+                <p className="font-semibold">
+                  {visit.evv.patientSignature ? '✅ Patient' : '❌ Patient'}
+                  {' '}
+                  {visit.evv.caregiverSignature ? '✅ Caregiver' : ''}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* EVV Exceptions */}
+          {visit.evvExceptions.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-slate-700 mb-2">EVV Exceptions</p>
+              {visit.evvExceptions.map(exc => (
+                <div key={exc.id} className="p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800 mb-1">
+                  <strong>{exc.type}:</strong> {exc.reason}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add Exception */}
+          {visit.visitStatus !== 'Completed' && (
+            <div>
+              {!showExceptionForm ? (
+                <button onClick={() => setShowExceptionForm(true)} className="btn-secondary text-xs w-full">
+                  <AlertTriangle size={12} /> Report EVV Exception
+                </button>
+              ) : (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
+                  <p className="text-xs font-semibold text-amber-800">EVV Exception</p>
+                  <select className="select text-xs w-full" value={exceptionType} onChange={e => setExceptionType(e.target.value as EVVExceptionType)}>
+                    {evvExceptionTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <textarea
+                    className="w-full text-xs p-2 border border-amber-200 rounded-lg bg-white resize-none"
+                    rows={2}
+                    placeholder="Reason for exception..."
+                    value={exceptionReason}
+                    onChange={e => setExceptionReason(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={handleSubmitException} className="btn-primary text-xs flex-1">Submit</button>
+                    <button onClick={() => setShowExceptionForm(false)} className="btn-secondary text-xs">Cancel</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Notes */}
+          {visit.notes && (
+            <div>
+              <p className="text-xs font-semibold text-slate-700 mb-1">Notes</p>
+              <p className="text-xs text-slate-600 p-2 bg-slate-50 rounded">{visit.notes}</p>
+            </div>
+          )}
         </div>
       )}
-      <div className="mt-3 flex gap-2">
-        {!evv.clockIn && (
-          <button
-            onClick={() => onUpdate({
-              visitStatus: 'In Progress',
-              evv: { ...evv, clockIn: new Date().toISOString(), gpsLatitude: '29.7604', gpsLongitude: '-95.3698', gpsAddress: `${visit.address} (GPS verified)`, syncStatus: 'Synced' }
-            })}
-            className="btn-primary text-xs py-1.5"
-          >
-            <Play size={11} /> Start Visit
-          </button>
-        )}
-        {isClocked && (
-          <button
-            onClick={() => onUpdate({
-              visitStatus: 'Completed',
-              evv: { ...evv, clockOut: new Date().toISOString(), patientSignature: true, syncStatus: 'Synced' }
-            })}
-            className="btn-primary text-xs py-1.5 bg-emerald-600 hover:bg-emerald-700"
-          >
-            <Square size={11} /> End Visit
-          </button>
-        )}
+    </div>
+  );
+}
+
+function RouteOptimization({ visits }: { visits: FieldVisit[] }) {
+  const scheduled = visits.filter(v => v.visitStatus === 'Scheduled' || v.visitStatus === 'In Progress');
+  if (scheduled.length === 0) return null;
+
+  return (
+    <div className="card mb-5 bg-sky-50/50 border-sky-200">
+      <div className="card-header mb-3 text-sky-800"><Navigation size={15} /> Optimized Route (Placeholder)</div>
+      <div className="space-y-2">
+        {scheduled.map((v, idx) => (
+          <div key={v.id} className="flex items-center gap-3 text-xs">
+            <div className="w-6 h-6 bg-advisa-accent text-white rounded-full flex items-center justify-center text-[10px] font-bold">{idx + 1}</div>
+            <div className="flex-1">
+              <p className="font-semibold text-slate-700">{v.patientInitials} — {v.time}</p>
+              <p className="text-slate-500">{v.address}</p>
+            </div>
+            <span className={`badge text-[9px] ${v.acuity === 'High' ? 'badge-urgent' : 'badge-warning'}`}>{v.acuity}</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-sky-500 mt-3 italic">⚠ Route optimization is a placeholder — real implementation requires mapping API integration.</p>
+    </div>
+  );
+}
+
+function OfflineQueue({ items, onRetry }: { items: OfflineSyncItem[]; onRetry: (id: string) => void }) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className="card mb-5 bg-amber-50/50 border-amber-200" data-testid="offline-queue">
+      <div className="card-header mb-3 text-amber-800"><WifiOff size={15} /> Offline Sync Queue</div>
+      <div className="space-y-2">
+        {items.map(item => (
+          <div key={item.id} className="flex items-center justify-between p-2 bg-white border border-amber-200 rounded-lg text-xs">
+            <div>
+              <p className="font-semibold text-slate-700">{item.patientInitials} — {item.action}</p>
+              <p className="text-slate-400">{item.retryCount > 0 ? `${item.retryCount} retries` : 'Queued'} · {new Date(item.queuedAt).toLocaleTimeString()}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`badge text-[9px] ${item.status === 'Failed' ? 'badge-urgent' : 'badge-warning'}`}>
+                {item.status}
+              </span>
+              {item.status === 'Failed' && (
+                <button onClick={() => onRetry(item.id)} className="btn-secondary text-[10px] py-1 px-2">
+                  <RotateCcw size={9} /> Retry
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
 export default function FieldAssistant() {
-  const { state, updateVisitChecklist, updateVisit, addAuditEntry, addQualityItem, addAlert } = useAppState();
-  const [selectedVisitId, setSelectedVisitId] = useState<string>(state.visits[0]?.id || '');
-  const [notes, setNotes] = useState('');
-  const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [isOnline] = useState(true);
-  const [showIncidentForm, setShowIncidentForm] = useState(false);
-  const [incidentDesc, setIncidentDesc] = useState('');
-  const [escalationMsg, setEscalationMsg] = useState('');
-  const [showEscalation, setShowEscalation] = useState(false);
+  const { state, updateVisit, updateVisitChecklist, updateOfflineSync, addAuditEntry, addToast } = useAppState();
 
-  // Filter visits for Field Staff role
-  const visibleVisits = state.currentUser.role === 'Field Staff'
+  // Filter visits for current user (Field Staff = Sarah Mitchell)
+  const myVisits = state.currentUser.role === 'Field Staff'
     ? state.visits.filter(v => v.staffName === state.currentUser.name)
     : state.visits;
 
-  const selectedVisit = visibleVisits.find(v => v.id === selectedVisitId);
-
-  const handleChecklistToggle = (taskIndex: number, completed: boolean) => {
-    if (!selectedVisit) return;
-    updateVisitChecklist(selectedVisit.id, taskIndex, completed);
+  const handleStartVisit = (visitId: string) => {
+    const now = new Date().toISOString();
+    updateVisit(visitId, {
+      visitStatus: 'In Progress',
+      evv: {
+        ...state.visits.find(v => v.id === visitId)!.evv,
+        clockIn: now,
+        gpsLatitude: '29.7604',
+        gpsLongitude: '-95.3698',
+        gpsAddress: 'GPS captured (demo)',
+        syncStatus: 'Pending',
+      },
+    });
     addAuditEntry({
       user: state.currentUser.name,
       role: state.currentUser.role,
       action: 'Updated',
       recordType: 'Visit',
-      recordId: selectedVisit.id,
-      details: `Checklist item "${selectedVisit.checklist[taskIndex].task}" ${completed ? 'completed' : 'unchecked'}`,
+      recordId: visitId,
+      details: `Started visit — EVV clock-in recorded`,
     });
+    addToast('Visit started — EVV clock-in recorded', 'success');
   };
 
-  const handleSaveNotes = () => {
-    if (!selectedVisit || !notes.trim()) return;
-    updateVisit(selectedVisit.id, { notes: selectedVisit.notes ? `${selectedVisit.notes}\n${notes}` : notes });
+  const handleEndVisit = (visitId: string) => {
+    const now = new Date().toISOString();
+    const visit = state.visits.find(v => v.id === visitId);
+    if (!visit) return;
+    updateVisit(visitId, {
+      visitStatus: 'Completed',
+      evv: {
+        ...visit.evv,
+        clockOut: now,
+        syncStatus: 'Synced',
+        patientSignature: visit.evv.patientSignature,
+      },
+    });
     addAuditEntry({
       user: state.currentUser.name,
       role: state.currentUser.role,
       action: 'Updated',
       recordType: 'Visit',
-      recordId: selectedVisit.id,
-      details: `Notes added for visit ${selectedVisit.patientInitials}`,
+      recordId: visitId,
+      details: `Ended visit — EVV clock-out recorded`,
     });
-    setNotes('');
+    addToast('Visit completed — EVV synced', 'success');
   };
 
-  const handleVisitUpdate = (updates: Partial<FieldVisit>) => {
-    if (!selectedVisit) return;
-    updateVisit(selectedVisit.id, updates);
-    addAuditEntry({
-      user: state.currentUser.name,
-      role: state.currentUser.role,
-      action: 'Updated',
-      recordType: 'Visit',
-      recordId: selectedVisit.id,
-      details: `Visit ${updates.visitStatus === 'In Progress' ? 'started' : updates.visitStatus === 'Completed' ? 'ended' : 'updated'} for ${selectedVisit.patientInitials}`,
-    });
+  const handleChecklistToggle = (visitId: string, taskIndex: number, completed: boolean) => {
+    updateVisitChecklist(visitId, taskIndex, completed);
   };
 
-  const handleIncidentReport = () => {
-    if (!selectedVisit || !incidentDesc.trim()) return;
-    const now = Date.now(); // eslint-disable-line react-hooks/purity
-    const newQualityItem: QualityItem = {
-      id: 'qi' + now,
-      type: 'Incident',
-      category: 'General QA',
-      patientInitials: selectedVisit.patientInitials,
-      dueDate: new Date(now + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      status: 'Open',
-      priority: 'High',
-      assignedTo: state.currentUser.name,
-    };
-    addQualityItem(newQualityItem);
-    addAuditEntry({
-      user: state.currentUser.name,
-      role: state.currentUser.role,
-      action: 'Created',
-      recordType: 'Quality',
-      recordId: newQualityItem.id,
-      details: `Incident reported for ${selectedVisit.patientInitials}: ${incidentDesc}`,
-    });
-    setIncidentDesc('');
-    setShowIncidentForm(false);
-  };
-
-  const handleEscalation = () => {
-    if (!selectedVisit || !escalationMsg.trim()) return;
-    addAlert({
-      type: 'escalation',
-      severity: 'high',
-      title: `Escalation: ${selectedVisit.patientInitials}`,
-      details: `${state.currentUser.name}: ${escalationMsg}`,
-      timestamp: new Date().toISOString(),
-      acknowledged: false,
-      sourceRecordType: 'Visit',
-      sourceRecordId: selectedVisit.id,
+  const handleAddException = (visitId: string, type: EVVExceptionType, reason: string) => {
+    const visit = state.visits.find(v => v.id === visitId);
+    if (!visit) return;
+    const newException = { id: 'exc' + Date.now(), visitId, type, reason };
+    updateVisit(visitId, {
+      evvExceptions: [...visit.evvExceptions, newException],
     });
     addAuditEntry({
       user: state.currentUser.name,
       role: state.currentUser.role,
       action: 'Created',
-      recordType: 'Visit',
-      recordId: selectedVisit.id,
-      details: `Escalation raised for ${selectedVisit.patientInitials}: ${escalationMsg}`,
+      recordType: 'EVV Exception',
+      recordId: visitId,
+      details: `EVV exception: ${type} — ${reason}`,
     });
-    setEscalationMsg('');
-    setShowEscalation(false);
+    addToast(`EVV exception reported: ${type}`, 'warning');
   };
+
+  const handleRetrySync = (itemId: string) => {
+    updateOfflineSync(itemId, { status: 'Pending', retryCount: (state.offlineSyncQueue.find(i => i.id === itemId)?.retryCount || 0) + 1 });
+    addToast('Retry queued', 'info');
+  };
+
+  // Stats
+  const scheduled = myVisits.filter(v => v.visitStatus === 'Scheduled').length;
+  const inProgress = myVisits.filter(v => v.visitStatus === 'In Progress').length;
+  const completed = myVisits.filter(v => v.visitStatus === 'Completed').length;
+  const missed = myVisits.filter(v => v.visitStatus === 'Missed').length;
 
   return (
-    <div className="max-w-2xl mx-auto">
-      {/* Mobile Header */}
-      <div className="flex items-center justify-between mb-4">
+    <div className="max-w-lg mx-auto">
+      <div className="mb-6">
         <h2 className="page-title flex items-center gap-2">
           <Smartphone size={22} className="text-advisa-accent" />
-          Field Visit Assistant
+          Field Assistant
         </h2>
-        <div className="flex items-center gap-2">
-          {/* Offline Indicator */}
-          <span className={`flex items-center gap-1 text-xs font-medium ${isOnline ? 'text-emerald-600' : 'text-red-600'}`}>
-            {isOnline ? <Wifi size={12} /> : <WifiOff size={12} />}
-            {isOnline ? 'Online' : 'Offline'}
-          </span>
-          {/* Mobile hamburger menu */}
-          <button onClick={() => setShowMobileMenu(!showMobileMenu)} className="md:hidden btn-secondary p-1.5">
-            {showMobileMenu ? <X size={16} /> : <Menu size={16} />}
-          </button>
+        <p className="text-xs text-slate-400 mt-1">
+          {myVisits.length} visits today · {scheduled} scheduled · {inProgress} in progress · {completed} completed
+          {missed > 0 && <span className="text-red-500"> · {missed} missed</span>}
+        </p>
+      </div>
+
+      {/* Quick Stats */}
+      <div className="grid grid-cols-4 gap-2 mb-5">
+        <div className="stat-card text-center py-2">
+          <p className="text-lg font-bold text-sky-600">{scheduled}</p>
+          <p className="text-[9px] text-slate-400">Scheduled</p>
+        </div>
+        <div className="stat-card text-center py-2">
+          <p className="text-lg font-bold text-amber-600">{inProgress}</p>
+          <p className="text-[9px] text-slate-400">In Progress</p>
+        </div>
+        <div className="stat-card text-center py-2">
+          <p className="text-lg font-bold text-emerald-600">{completed}</p>
+          <p className="text-[9px] text-slate-400">Completed</p>
+        </div>
+        <div className="stat-card text-center py-2">
+          <p className="text-lg font-bold text-red-600">{missed}</p>
+          <p className="text-[9px] text-slate-400">Missed</p>
         </div>
       </div>
 
-      {/* Mobile Menu */}
-      {showMobileMenu && (
-        <div className="md:hidden card mb-4 bg-slate-50">
-          <div className="space-y-1">
-            {visibleVisits.map(v => (
-              <button
-                key={v.id}
-                onClick={() => { setSelectedVisitId(v.id); setShowMobileMenu(false); }}
-                className={`w-full text-left px-3 py-2 rounded text-sm ${v.id === selectedVisitId ? 'bg-advisa-accent text-white' : 'hover:bg-slate-100'}`}
-              >
-                {v.time} — {v.patientInitials} ({v.visitStatus})
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Route Optimization */}
+      <RouteOptimization visits={myVisits} />
 
-      {/* Today's Route */}
-      <div className="mb-4">
-        <p className="section-title mb-2 flex items-center gap-2"><Navigation size={13} /> Today&apos;s Route</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {visibleVisits.map(v => (
-            <button
-              key={v.id}
-              onClick={() => setSelectedVisitId(v.id)}
-              className={`text-left p-3 rounded-lg border transition-all ${v.id === selectedVisitId ? 'border-advisa-accent bg-sky-50 shadow-sm' : 'border-advisa-border hover:bg-slate-50'}`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-sm text-slate-800">{v.time} — {v.patientInitials}</span>
-                <span className={`badge text-[10px] ${v.visitStatus === 'Completed' ? 'badge-success' : v.visitStatus === 'In Progress' ? 'badge-info' : v.visitStatus === 'Missed' ? 'badge-urgent' : 'badge-neutral'}`}>
-                  {v.visitStatus}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1"><MapPin size={9} /> {v.address}</p>
-              <p className="text-[10px] text-slate-400">{v.serviceType}</p>
-            </button>
-          ))}
-        </div>
-        {/* Map Placeholder */}
-        <div className="mt-3 h-32 bg-slate-200 rounded-lg flex items-center justify-center text-xs text-slate-400 border border-advisa-border">
-          <MapPin size={16} className="mr-2" /> Route map placeholder — integrate with mapping API
-        </div>
-      </div>
+      {/* Offline Queue */}
+      <OfflineQueue items={state.offlineSyncQueue} onRetry={handleRetrySync} />
 
-      {visibleVisits.length === 0 && (
-        <div className="text-center py-16 text-slate-400 text-sm">No visits assigned for today</div>
-      )}
-
-      {/* Selected Visit Detail */}
-      {selectedVisit && (
-        <div className="space-y-4">
-          {/* Visit Header */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-lg font-bold text-slate-800">{selectedVisit.patientInitials}</p>
-                <p className="text-xs text-slate-400">{selectedVisit.address} · {selectedVisit.serviceType}</p>
-              </div>
-              <span className={`badge ${selectedVisit.visitStatus === 'Completed' ? 'badge-success' : selectedVisit.visitStatus === 'In Progress' ? 'badge-info' : 'badge-neutral'}`}>
-                {selectedVisit.visitStatus}
-              </span>
-            </div>
-
-            {/* EVV Panel */}
-            <EVVPanel visit={selectedVisit} onUpdate={handleVisitUpdate} />
-          </div>
-
-          {/* Checklist */}
-          <div className="card">
-            <p className="section-title mb-3 flex items-center gap-2"><CheckCircle size={13} /> Visit Checklist</p>
-            <div className="space-y-1.5">
-              {selectedVisit.checklist.map((task, idx) => (
-                <label key={idx} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={task.completed}
-                    onChange={e => handleChecklistToggle(idx, e.target.checked)}
-                    className="rounded border-slate-300 text-advisa-accent focus:ring-advisa-accent"
-                  />
-                  <span className={`text-sm ${task.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>{task.task}</span>
-                </label>
-              ))}
-            </div>
-            <p className="text-[10px] text-slate-400 mt-2">
-              {selectedVisit.checklist.filter(t => t.completed).length}/{selectedVisit.checklist.length} completed
-            </p>
-          </div>
-
-          {/* Supplies */}
-          {selectedVisit.suppliesNeeded.length > 0 && (
-            <div className="card">
-              <p className="section-title mb-2">Supplies Needed</p>
-              <div className="flex flex-wrap gap-1.5">
-                {selectedVisit.suppliesNeeded.map(s => (
-                  <span key={s} className="badge badge-neutral">{s}</span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Notes */}
-          <div className="card">
-            <p className="section-title mb-2 flex items-center gap-2"><FileText size={13} /> Visit Notes</p>
-            {selectedVisit.notes && (
-              <div className="p-2 bg-slate-50 rounded-lg text-xs text-slate-600 mb-2 whitespace-pre-wrap">{selectedVisit.notes}</div>
-            )}
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="Add visit notes..."
-              className="input h-20 resize-none text-sm"
+      {/* Visit Cards — Mobile-first layout */}
+      <div className="space-y-4">
+        {myVisits.length === 0 && (
+          <p className="text-sm text-slate-400 text-center py-8">No visits assigned today</p>
+        )}
+        {myVisits
+          .sort((a, b) => {
+            const order = { 'In Progress': 0, 'Scheduled': 1, 'Missed': 2, 'Completed': 3 };
+            return (order[a.visitStatus] ?? 9) - (order[b.visitStatus] ?? 9);
+          })
+          .map(visit => (
+            <VisitCard
+              key={visit.id}
+              visit={visit}
+              onStartVisit={handleStartVisit}
+              onEndVisit={handleEndVisit}
+              onChecklistToggle={handleChecklistToggle}
+              onAddException={handleAddException}
             />
-            <button onClick={handleSaveNotes} className="btn-primary text-xs mt-2" disabled={!notes.trim()}>
-              <Save size={11} /> Save Notes
-            </button>
-          </div>
-
-          {/* Actions Row */}
-          <div className="grid grid-cols-2 gap-3">
-            <button onClick={() => setShowEscalation(!showEscalation)} className="btn-secondary text-xs justify-center">
-              <MessageSquare size={13} /> Escalate
-            </button>
-            <button onClick={() => setShowIncidentForm(!showIncidentForm)} className="btn-secondary text-xs justify-center text-red-600 border-red-200 hover:bg-red-50">
-              <AlertTriangle size={13} /> Incident Report
-            </button>
-          </div>
-
-          {/* Escalation Form */}
-          {showEscalation && (
-            <div className="card bg-amber-50/50 border-amber-200">
-              <p className="section-title mb-2 flex items-center gap-2"><Send size={12} /> Secure Escalation</p>
-              <textarea
-                value={escalationMsg}
-                onChange={e => setEscalationMsg(e.target.value)}
-                placeholder="Describe the escalation..."
-                className="input h-16 resize-none text-sm mb-2"
-              />
-              <button onClick={handleEscalation} className="btn-primary text-xs" disabled={!escalationMsg.trim()}>
-                <Send size={11} /> Send Escalation
-              </button>
-            </div>
-          )}
-
-          {/* Incident Form */}
-          {showIncidentForm && (
-            <div className="card bg-red-50/50 border-red-200">
-              <p className="section-title mb-2 flex items-center gap-2 text-red-700"><AlertTriangle size={12} /> Incident Report</p>
-              <p className="text-[10px] text-red-500 mb-2">This creates a quality item and audit entry</p>
-              <textarea
-                value={incidentDesc}
-                onChange={e => setIncidentDesc(e.target.value)}
-                placeholder="Describe the incident..."
-                className="input h-16 resize-none text-sm mb-2"
-              />
-              <button onClick={handleIncidentReport} className="btn-primary text-xs bg-red-600 hover:bg-red-700" disabled={!incidentDesc.trim()}>
-                <AlertTriangle size={11} /> Submit Incident
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+          ))
+        }
+      </div>
     </div>
   );
 }

@@ -1,112 +1,121 @@
-import { Lock, XCircle, AlertTriangle, Shield, Server, Key, Eye, Archive, RefreshCcw, Clock, FileText } from 'lucide-react';
+import { Lock, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 
-const securityItems = [
+interface ChecklistItem {
+  category: string;
+  items: { label: string; status: 'Required' | 'Implemented (Demo)' | 'Planned' | 'N/A (Demo)' }[];
+}
+
+const checklist: ChecklistItem[] = [
   {
     category: 'Access Control',
     items: [
-      { label: 'Business Associate Agreement (BAA) signed with all vendors', status: 'required', icon: <FileText size={13} /> },
-      { label: 'Multi-Factor Authentication (MFA) for all users', status: 'required', icon: <Key size={13} /> },
-      { label: 'Server-side RBAC enforcing least-privilege access', status: 'required', icon: <Shield size={13} /> },
-      { label: 'Automatic session logoff after inactivity', status: 'required', icon: <Clock size={13} /> },
-      { label: 'Unique user IDs with no shared accounts', status: 'required', icon: <Eye size={13} /> },
+      { label: 'Role-based access control (RBAC) enforced server-side', status: 'Required' },
+      { label: 'Multi-factor authentication (MFA)', status: 'Required' },
+      { label: 'Automatic session timeout / logoff', status: 'Required' },
+      { label: 'Unique user identification', status: 'Required' },
+      { label: 'Client-side role-based navigation (demo RBAC)', status: 'Implemented (Demo)' },
     ],
   },
   {
     category: 'Data Protection',
     items: [
-      { label: 'Encryption at rest (AES-256 or equivalent)', status: 'required', icon: <Lock size={13} /> },
-      { label: 'Encryption in transit (TLS 1.2+)', status: 'required', icon: <Lock size={13} /> },
-      { label: 'PHI data masking in non-production environments', status: 'required', icon: <Eye size={13} /> },
-      { label: 'Secure backups with tested restore procedures', status: 'required', icon: <Archive size={13} /> },
+      { label: 'Encryption at rest (AES-256)', status: 'Required' },
+      { label: 'Encryption in transit (TLS 1.2+)', status: 'Required' },
+      { label: 'No real PHI in demo data', status: 'Implemented (Demo)' },
+      { label: 'Data backup and recovery procedures', status: 'Required' },
+      { label: 'Disaster recovery plan', status: 'Required' },
     ],
   },
   {
-    category: 'Audit & Monitoring',
+    category: 'Audit & Logging',
     items: [
-      { label: 'Immutable audit logging (tamper-evident, append-only)', status: 'required', icon: <FileText size={13} /> },
-      { label: 'Real-time intrusion detection / monitoring', status: 'required', icon: <AlertTriangle size={13} /> },
-      { label: 'Audit logs retained for minimum 6 years', status: 'required', icon: <Archive size={13} /> },
-      { label: 'Regular log review by designated security officer', status: 'required', icon: <Eye size={13} /> },
+      { label: 'Immutable audit logging (server-side)', status: 'Required' },
+      { label: 'Client-side audit log with before/after values', status: 'Implemented (Demo)' },
+      { label: 'Audit/security documentation retained at least 6 years where required; operational audit-log retention must be approved by compliance/legal and configured according to HIPAA, state law, payer rules, contracts, and company policy', status: 'Required' },
+      { label: 'User activity tracking', status: 'Implemented (Demo)' },
     ],
   },
   {
-    category: 'Disaster Recovery',
+    category: 'Agreements & Compliance',
     items: [
-      { label: 'Documented disaster recovery plan', status: 'required', icon: <RefreshCcw size={13} /> },
-      { label: 'Regular DR drills and documentation', status: 'required', icon: <RefreshCcw size={13} /> },
-      { label: 'RPO and RTO defined and tested', status: 'required', icon: <Clock size={13} /> },
+      { label: 'Business Associate Agreement (BAA)', status: 'Required' },
+      { label: 'HIPAA Security Rule risk analysis', status: 'Required' },
+      { label: 'HIPAA Privacy Rule policies', status: 'Required' },
+      { label: 'State-specific health information privacy laws', status: 'Required' },
+      { label: 'Employee security awareness training', status: 'Required' },
     ],
   },
   {
-    category: 'Compliance',
+    category: 'Technical Security',
     items: [
-      { label: 'Annual HIPAA Security Risk Assessment', status: 'required', icon: <Shield size={13} /> },
-      { label: 'Security awareness training for all staff', status: 'required', icon: <FileText size={13} /> },
-      { label: 'Incident response plan documented and tested', status: 'required', icon: <AlertTriangle size={13} /> },
-      { label: 'Physical safeguards for servers/workstations', status: 'required', icon: <Server size={13} /> },
-      { label: 'Full HIPAA / security review before real PHI', status: 'required', icon: <Shield size={13} /> },
+      { label: 'Penetration testing', status: 'Required' },
+      { label: 'Vulnerability scanning', status: 'Required' },
+      { label: 'Intrusion detection/prevention', status: 'Required' },
+      { label: 'Secure software development lifecycle (SDLC)', status: 'Planned' },
+      { label: 'Secure backups with encryption', status: 'Required' },
+    ],
+  },
+  {
+    category: 'Incident Response',
+    items: [
+      { label: 'Security incident response plan', status: 'Required' },
+      { label: 'Breach notification procedures (≤72 hours)', status: 'Required' },
+      { label: 'Sanctions policy for violations', status: 'Required' },
     ],
   },
 ];
 
+const statusStyle: Record<string, { badge: string; icon: React.ReactNode }> = {
+  'Required': { badge: 'badge-urgent', icon: <XCircle size={11} className="text-red-500" /> },
+  'Implemented (Demo)': { badge: 'badge-success', icon: <CheckCircle size={11} className="text-emerald-500" /> },
+  'Planned': { badge: 'badge-warning', icon: <AlertTriangle size={11} className="text-amber-500" /> },
+  'N/A (Demo)': { badge: 'badge-neutral', icon: <AlertTriangle size={11} className="text-slate-400" /> },
+};
+
 export default function SecurityChecklist() {
-  const totalItems = securityItems.reduce((sum, cat) => sum + cat.items.length, 0);
+  const total = checklist.reduce((s, c) => s + c.items.length, 0);
+  const implemented = checklist.reduce((s, c) => s + c.items.filter(i => i.status === 'Implemented (Demo)').length, 0);
+  const required = checklist.reduce((s, c) => s + c.items.filter(i => i.status === 'Required').length, 0);
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="page-title flex items-center gap-2">
-          <Lock size={22} className="text-advisa-accent" />
-          Production Security Checklist
-        </h2>
-        <p className="text-xs text-slate-400 mt-1">{totalItems} requirements · All pending implementation</p>
-      </div>
+      <h2 className="page-title flex items-center gap-2 mb-2">
+        <Lock size={22} className="text-advisa-accent" />
+        Security & HIPAA Checklist
+      </h2>
+      <p className="text-xs text-slate-400 mb-6">
+        {implemented}/{total} items implemented in demo · {required} require production implementation
+      </p>
 
-      {/* Warning Banner */}
-      <div className="mb-5 p-4 bg-red-50 border border-red-200 rounded-lg">
-        <div className="flex items-center gap-2 mb-2">
-          <AlertTriangle size={16} className="text-red-600" />
-          <p className="text-sm font-bold text-red-800">⚠ Not for Production Use</p>
+      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-6 text-xs text-amber-800 flex items-start gap-2">
+        <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+        <div>
+          <strong>This is a demo/prototype.</strong> Items marked "Required" must be implemented before handling
+          any real Protected Health Information (PHI). This checklist is for awareness only and does not constitute
+          legal or compliance advice. Consult with qualified HIPAA compliance professionals.
         </div>
-        <p className="text-xs text-red-700 leading-relaxed">
-          This application is a <strong>HIPAA-conscious prototype</strong> using demo data only. Before handling any
-          real Protected Health Information (PHI), every item on this checklist must be fully implemented, tested,
-          and verified by qualified security professionals. This prototype does not meet HIPAA Security Rule requirements.
-        </p>
       </div>
 
-      {/* Checklist Categories */}
-      <div className="space-y-4">
-        {securityItems.map(cat => (
-          <div key={cat.category} className="card">
-            <p className="section-title mb-3 flex items-center gap-2">
-              <Shield size={14} className="text-advisa-accent" />
-              {cat.category}
-            </p>
-            <div className="space-y-1.5">
-              {cat.items.map((item, idx) => (
-                <div key={idx} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                  <span className="text-slate-400">{item.icon}</span>
-                  <span className="flex-1 text-sm text-slate-700">{item.label}</span>
-                  <span className="flex items-center gap-1 text-xs text-red-500 font-medium">
-                    <XCircle size={13} /> Required
-                  </span>
-                </div>
-              ))}
+      <div className="space-y-5">
+        {checklist.map(category => (
+          <div key={category.category} className="card">
+            <div className="card-header mb-3">{category.category}</div>
+            <div className="space-y-2">
+              {category.items.map((item, idx) => {
+                const style = statusStyle[item.status];
+                return (
+                  <div key={idx} className="flex items-start gap-2 p-2 bg-slate-50 rounded-lg">
+                    <div className="mt-0.5 flex-shrink-0">{style.icon}</div>
+                    <div className="flex-1">
+                      <p className="text-xs text-slate-700">{item.label}</p>
+                    </div>
+                    <span className={`badge ${style.badge} text-[9px] flex-shrink-0`}>{item.status}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}
-      </div>
-
-      {/* Demo Login Note */}
-      <div className="card mt-5 bg-slate-50">
-        <div className="flex items-center gap-2 mb-2"><AlertTriangle size={14} className="text-slate-500" /><p className="section-title">Demo Login</p></div>
-        <p className="text-xs text-slate-500 leading-relaxed">
-          This prototype uses a demo role selector (Settings → Demo Role Switcher) instead of a real login system.
-          In production, a proper authentication system with SSO/MFA, session management, and secure credential storage
-          would be required. The current role switching mechanism is for demonstration purposes only and provides
-          no actual security.
-        </p>
       </div>
     </div>
   );

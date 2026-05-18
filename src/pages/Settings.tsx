@@ -1,111 +1,89 @@
 import { useAppState } from '../context/AppContext';
-import { allRoles, allResources, allCRUDActions, hasPermission } from '../lib/permissions';
+import { roleNameMap } from '../types';
 import type { UserRole } from '../types';
-import { Settings as SettingsIcon, ShieldCheck, Eye, Pencil, Plus, Trash2, Download, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { Settings as SettingsIcon, User, Shield, Bell } from 'lucide-react';
 
-export default function Settings() {
-  const { state, setCurrentRole, addAuditEntry } = useAppState();
+const roles: { role: UserRole; name: string; description: string }[] = [
+  { role: 'VP', name: roleNameMap['VP'], description: 'Full access to all modules, dashboard, audit logs, and executive wallboard.' },
+  { role: 'Intake Coordinator', name: roleNameMap['Intake Coordinator'], description: 'Referral pipeline, document management, eligibility tracking.' },
+  { role: 'Scheduler', name: roleNameMap['Scheduler'], description: 'Staffing, shift board, staff assignment, route optimization.' },
+  { role: 'Field Staff', name: roleNameMap['Field Staff'], description: 'Field assistant (visits, EVV, checklist), quality items assigned to you.' },
+  { role: 'Compliance Admin', name: roleNameMap['Compliance Admin'], description: 'Credential compliance, audit logs, security checklist, notifications.' },
+];
+
+export default function SettingsPage() {
+  const { state, setCurrentRole, addToast } = useAppState();
 
   const handleRoleChange = (role: UserRole) => {
-    addAuditEntry({
-      user: state.currentUser.name,
-      role: state.currentUser.role,
-      action: 'Updated',
-      recordType: 'User',
-      recordId: state.currentUser.name,
-      details: `[Demo] Role switched from ${state.currentUser.role} to ${role}`,
-      before: state.currentUser.role,
-      after: role,
-    });
     setCurrentRole(role);
-  };
-
-  const actionIcons: Record<string, React.ReactNode> = {
-    view: <Eye size={10} />,
-    edit: <Pencil size={10} />,
-    create: <Plus size={10} />,
-    delete: <Trash2 size={10} />,
-    export: <Download size={10} />,
+    addToast(`Switched to ${roleNameMap[role]} (${role})`, 'info');
   };
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="page-title flex items-center gap-2">
-          <SettingsIcon size={22} className="text-advisa-accent" />
-          Settings
-        </h2>
+      <h2 className="page-title flex items-center gap-2 mb-6">
+        <SettingsIcon size={22} className="text-advisa-accent" />
+        Settings
+      </h2>
+
+      {/* Current User */}
+      <div className="card mb-5">
+        <div className="card-header mb-3"><User size={15} /> Current User</div>
+        <div className="flex items-center gap-4 p-3 bg-advisa-accent/5 rounded-lg border border-advisa-accent/20">
+          <div className="w-12 h-12 bg-advisa-accent rounded-full flex items-center justify-center text-white text-lg font-bold">
+            {state.currentUser.name.charAt(0)}
+          </div>
+          <div>
+            <p className="text-lg font-semibold text-slate-800">{state.currentUser.name}</p>
+            <p className="text-sm text-slate-500">{state.currentUser.role}</p>
+          </div>
+        </div>
       </div>
 
-      {/* Demo Role Switcher */}
+      {/* Role Switcher */}
       <div className="card mb-5">
-        <div className="flex items-center gap-2 mb-3">
-          <AlertTriangle size={15} className="text-amber-500" />
-          <p className="section-title">Demo Role Switcher</p>
-        </div>
-        <p className="text-xs text-slate-400 mb-3">
-          ⚠ This is a demo feature for prototype testing only. In production, roles would be managed by an admin
-          through proper identity/access management.
+        <div className="card-header mb-3"><Shield size={15} /> Demo Role Switcher</div>
+        <p className="text-xs text-slate-500 mb-4">
+          Switch between roles to see how the Command Center adapts permissions, navigation, and data views.
+          This is a demo feature — production would use SSO/authentication.
         </p>
-        <div className="flex flex-wrap gap-2">
-          {allRoles.map(role => (
+        <div className="space-y-2">
+          {roles.map(r => (
             <button
-              key={role}
-              onClick={() => handleRoleChange(role)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${state.currentUser.role === role
-                ? 'bg-advisa-accent text-white border-advisa-accent shadow-sm'
-                : 'bg-white text-slate-600 border-advisa-border hover:bg-slate-50'
-                }`}
+              key={r.role}
+              onClick={() => handleRoleChange(r.role)}
+              className={`w-full flex items-center justify-between p-3 rounded-lg border text-left transition-all ${state.currentUser.role === r.role
+                ? 'border-advisa-accent bg-sky-50 shadow-sm'
+                : 'border-advisa-border bg-white hover:bg-slate-50'
+              }`}
+              data-testid={`role-${r.role.toLowerCase().replace(/\s+/g, '-')}`}
             >
-              {role}
+              <div>
+                <p className="text-sm font-semibold text-slate-800">
+                  {r.name}
+                  <span className="text-xs text-slate-400 font-normal ml-2">({r.role})</span>
+                </p>
+                <p className="text-[10px] text-slate-500 mt-0.5">{r.description}</p>
+              </div>
+              {state.currentUser.role === r.role && (
+                <span className="badge badge-success text-[10px]">Active</span>
+              )}
             </button>
           ))}
         </div>
-        <div className="mt-3 p-3 bg-slate-50 rounded-lg text-xs text-slate-600">
-          <p>Current role: <strong>{state.currentUser.role}</strong></p>
-          <p>User: <strong>{state.currentUser.name}</strong></p>
-        </div>
       </div>
 
-      {/* CRUD Permission Grid */}
-      <div className="card">
-        <div className="flex items-center gap-2 mb-3">
-          <ShieldCheck size={15} className="text-advisa-accent" />
-          <p className="section-title">CRUD Permission Grid</p>
-        </div>
-        <p className="text-xs text-slate-400 mb-4">
-          Shows the CRUD permissions for the currently selected role: <strong>{state.currentUser.role}</strong>
-        </p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr>
-                <th className="table-head">Resource</th>
-                {allCRUDActions.map(action => (
-                  <th key={action} className="table-head text-center">
-                    <div className="flex items-center justify-center gap-1">{actionIcons[action]} {action}</div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {allResources.map(resource => (
-                <tr key={resource} className="hover:bg-slate-50 transition-colors">
-                  <td className="table-cell font-medium text-slate-700">{resource}</td>
-                  {allCRUDActions.map(action => (
-                    <td key={action} className="table-cell text-center">
-                      {hasPermission(state.currentUser.role, resource, action) ? (
-                        <CheckCircle size={14} className="text-emerald-500 mx-auto" />
-                      ) : (
-                        <XCircle size={14} className="text-red-300 mx-auto" />
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {/* Info */}
+      <div className="card bg-slate-50">
+        <div className="card-header mb-2"><Bell size={15} /> About This Demo</div>
+        <ul className="text-xs text-slate-600 space-y-1.5 list-disc list-inside">
+          <li>All data is <strong>fake/demo</strong> — no real PHI is used or stored.</li>
+          <li>Role switching is client-side only. Production requires server-side RBAC.</li>
+          <li>Notification Center (bell icon) shows alerts grouped by severity.</li>
+          <li>Toast notifications replace all browser <code>alert()</code> calls.</li>
+          <li>AI features are labeled as placeholders with demo-only notices.</li>
+          <li>Audit logs capture all state changes with before/after values.</li>
+        </ul>
       </div>
     </div>
   );

@@ -1,296 +1,299 @@
 import { useAppState } from '../context/AppContext';
 import { useState } from 'react';
-import type { ReferralPartner } from '../types';
+import { calculatePartnerRiskLabel } from '../utils/dataLogic';
+import type { ReferralPartner, PartnerRiskLabel } from '../types';
 import {
-  Handshake, Users, TrendingUp, Plus, ChevronDown, ChevronUp,
-  Phone, Mail, BarChart3, Calendar, AlertTriangle, CheckCircle, XCircle
+  Handshake, TrendingUp, TrendingDown, Minus, X, Eye, Phone, Mail,
+  Calendar, User, Activity, AlertTriangle, BarChart3
 } from 'lucide-react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 
-export default function ReferralPartners() {
-  const { state, addPartner, updatePartner, addAuditEntry } = useAppState();
-  const [filterType, setFilterType] = useState('All');
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [selectedPartner, setSelectedPartner] = useState<string | null>(null);
-  const [newPartner, setNewPartner] = useState({ name: '', type: 'Hospital' as ReferralPartner['type'], contactName: '', contactEmail: '', contactPhone: '', volume: '' });
+const riskLabelColors: Record<PartnerRiskLabel, string> = {
+  'Growing': 'badge-success',
+  'Stable': 'badge-info',
+  'Needs Attention': 'badge-warning',
+  'At Risk': 'badge-urgent',
+};
 
-  const types = ['All', 'Hospital', 'Physician', 'Discharge Planner', 'Case Manager', 'Attorney'];
+const riskLabelIcons: Record<PartnerRiskLabel, React.ReactNode> = {
+  'Growing': <TrendingUp size={11} className="text-emerald-600" />,
+  'Stable': <Minus size={11} className="text-sky-600" />,
+  'Needs Attention': <AlertTriangle size={11} className="text-amber-600" />,
+  'At Risk': <TrendingDown size={11} className="text-red-600" />,
+};
 
-  const filtered = state.partners.filter(p => filterType === 'All' || p.type === filterType);
-  const totalVolume = state.partners.reduce((sum, p) => sum + p.volume, 0);
-  const totalAccepted = state.partners.reduce((sum, p) => sum + p.acceptedReferrals, 0);
-  const totalDeclined = state.partners.reduce((sum, p) => sum + p.declinedReferrals, 0);
-  const overallConversion = totalVolume > 0 ? Math.round((totalAccepted / totalVolume) * 100) : 0;
+function PartnerDetailDrawer({ partner, onClose }: { partner: ReferralPartner; onClose: () => void }) {
+  const { state, updatePartner, addAuditEntry, addToast } = useAppState();
+  const riskLabel = calculatePartnerRiskLabel(partner);
+  const conversionRate = partner.volume > 0 ? Math.round((partner.acceptedReferrals / partner.volume) * 100) : 0;
 
-  // Follow-up reminders (due today or past due)
-  const today = new Date().toISOString().split('T')[0];
-  const dueReminders = state.partners.filter(p => p.nextFollowUpReminder <= today);
+  const trendData = partner.trends.map(t => ({
+    period: t.period,
+    Volume: t.volume,
+    Accepted: t.accepted,
+    Declined: t.declined,
+  })).reverse();
 
-  // Chart data for partner performance
-  const chartData = state.partners.map(p => ({
-    name: p.name.length > 15 ? p.name.slice(0, 15) + '…' : p.name,
-    Accepted: p.acceptedReferrals,
-    Declined: p.declinedReferrals,
-  }));
-
-  const handleAddPartner = () => {
-    if (!newPartner.name) return;
-    const partner: ReferralPartner = {
-      id: 'p' + Date.now(),
-      name: newPartner.name,
-      type: newPartner.type,
-      volume: parseInt(newPartner.volume) || 0,
-      acceptedReferrals: 0,
-      declinedReferrals: 0,
-      avgTimeToSOC: '—',
-      lostReasons: [],
-      lastFollowUp: today,
-      nextFollowUpReminder: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      notes: '',
-      contactName: newPartner.contactName,
-      contactEmail: newPartner.contactEmail,
-      contactPhone: newPartner.contactPhone,
-      timeline: [{ date: today, action: 'Partner added', user: state.currentUser.name }],
-    };
-    addPartner(partner);
-    addAuditEntry({
-      user: state.currentUser.name,
-      role: state.currentUser.role,
-      action: 'Created',
-      recordType: 'Partner',
-      recordId: partner.id,
-      details: `New partner added: ${partner.name}`,
-    });
-    setNewPartner({ name: '', type: 'Hospital', contactName: '', contactEmail: '', contactPhone: '', volume: '' });
-    setShowAddForm(false);
-  };
-
-  const handleFollowUp = (partnerId: string) => {
-    const partner = state.partners.find(p => p.id === partnerId);
-    if (!partner) return;
-    const newTimeline = [...partner.timeline, { date: today, action: 'Follow-up completed', user: state.currentUser.name }];
-    const nextReminder = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // eslint-disable-line react-hooks/purity
-    updatePartner(partnerId, {
-      lastFollowUp: today,
-      nextFollowUpReminder: nextReminder,
-      timeline: newTimeline,
+  const handleFollowUp = () => {
+    const now = new Date().toISOString().split('T')[0];
+    const nextDate = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+    updatePartner(partner.id, {
+      lastFollowUp: now,
+      nextFollowUpReminder: nextDate,
+      timeline: [...partner.timeline, { date: now, action: 'Follow-up completed', user: state.currentUser.name }],
     });
     addAuditEntry({
       user: state.currentUser.name,
       role: state.currentUser.role,
       action: 'Updated',
       recordType: 'Partner',
-      recordId: partnerId,
-      details: `Follow-up completed for ${partner.name}`,
+      recordId: partner.id,
+      details: `Follow-up completed for ${partner.name}. Next: ${nextDate}`,
     });
+    addToast(`Follow-up recorded for ${partner.name}`, 'success');
   };
 
   return (
+    <div className="fixed inset-0 z-40 flex">
+      <div className="flex-1 bg-black/30" onClick={onClose} />
+      <div className="w-[480px] bg-white shadow-2xl overflow-y-auto border-l border-advisa-border">
+        <div className="sticky top-0 bg-white border-b border-advisa-border px-5 py-4 flex items-center justify-between z-10">
+          <div>
+            <p className="text-lg font-bold text-slate-800">{partner.name}</p>
+            <p className="text-xs text-slate-400">{partner.type} · {partner.contactName}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={18} /></button>
+        </div>
+
+        <div className="p-5 space-y-5">
+          {/* Risk Label + Scorecard */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3 bg-slate-50 rounded-lg">
+              <p className="stat-label">Risk Label</p>
+              <span className={`badge ${riskLabelColors[riskLabel]} mt-1 flex items-center gap-1 w-fit`}>
+                {riskLabelIcons[riskLabel]} {riskLabel}
+              </span>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-lg">
+              <p className="stat-label">Conversion Rate</p>
+              <p className={`text-xl font-bold ${conversionRate >= 70 ? 'text-emerald-600' : conversionRate >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
+                {conversionRate}%
+              </p>
+            </div>
+          </div>
+
+          {/* Scorecard */}
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="p-3 bg-sky-50 rounded-lg"><p className="text-slate-500">30d Volume</p><p className="text-lg font-bold text-sky-600">{partner.volume}</p></div>
+            <div className="p-3 bg-emerald-50 rounded-lg"><p className="text-slate-500">Accepted</p><p className="text-lg font-bold text-emerald-600">{partner.acceptedReferrals}</p></div>
+            <div className="p-3 bg-red-50 rounded-lg"><p className="text-slate-500">Declined</p><p className="text-lg font-bold text-red-600">{partner.declinedReferrals}</p></div>
+            <div className="p-3 bg-violet-50 rounded-lg"><p className="text-slate-500">Avg Referral→SOC</p><p className="text-lg font-bold text-violet-600">{partner.avgTimeToSOC}</p></div>
+          </div>
+
+          {/* Lost Reasons */}
+          {partner.lostReasons.length > 0 && (
+            <div>
+              <p className="section-title mb-2">Lost Reasons</p>
+              <div className="flex gap-1.5 flex-wrap">
+                {partner.lostReasons.map(r => (
+                  <span key={r} className="badge badge-urgent text-[10px]">{r}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Contact */}
+          <div className="p-3 bg-slate-50 rounded-lg">
+            <p className="section-title mb-2">Contact</p>
+            <div className="space-y-1.5 text-xs">
+              <p className="flex items-center gap-2"><User size={11} className="text-slate-400" /> {partner.contactName}</p>
+              <p className="flex items-center gap-2"><Mail size={11} className="text-slate-400" /> {partner.contactEmail}</p>
+              <p className="flex items-center gap-2"><Phone size={11} className="text-slate-400" /> {partner.contactPhone}</p>
+              <p className="flex items-center gap-2"><User size={11} className="text-slate-400" /> Owner: <strong>{partner.relationshipOwner}</strong></p>
+            </div>
+          </div>
+
+          {/* Follow-Up */}
+          <div className="p-3 bg-slate-50 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <p className="section-title">Follow-Up</p>
+              <button onClick={handleFollowUp} className="btn-primary text-[10px] py-1 px-2">
+                <Calendar size={10} /> Record Follow-Up
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <p><span className="text-slate-400">Last:</span> <strong>{partner.lastFollowUp}</strong></p>
+              <p><span className="text-slate-400">Next:</span> <strong>{partner.nextFollowUpReminder}</strong></p>
+            </div>
+          </div>
+
+          {/* Trend Chart */}
+          {trendData.length > 0 && (
+            <div>
+              <p className="section-title mb-2 flex items-center gap-2"><BarChart3 size={13} /> 30/60/90 Day Trend</p>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={trendData}>
+                  <XAxis dataKey="period" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: 10 }} />
+                  <Bar dataKey="Volume" fill="#0ea5e9" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="Accepted" fill="#10b981" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="Declined" fill="#ef4444" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Timeline */}
+          {partner.timeline.length > 0 && (
+            <div>
+              <p className="section-title mb-2 flex items-center gap-2"><Activity size={13} /> Activity Timeline</p>
+              <div className="space-y-2 relative pl-4 border-l-2 border-advisa-border">
+                {partner.timeline.map((event, idx) => (
+                  <div key={idx} className="relative">
+                    <div className="absolute -left-[21px] top-1 w-3 h-3 bg-advisa-accent rounded-full border-2 border-white" />
+                    <p className="text-xs font-semibold text-slate-700">{event.action}</p>
+                    <p className="text-[10px] text-slate-400">{event.date} · {event.user}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Notes */}
+          {partner.notes && (
+            <div>
+              <p className="section-title mb-1">Notes</p>
+              <p className="text-xs text-slate-600 p-2 bg-slate-50 rounded">{partner.notes}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ReferralPartners() {
+  const { state } = useAppState();
+  const [selectedPartner, setSelectedPartner] = useState<ReferralPartner | null>(null);
+  const [filterRisk, setFilterRisk] = useState<PartnerRiskLabel | 'All'>('All');
+
+  const filtered = state.partners.filter(p =>
+    filterRisk === 'All' || p.riskLabel === filterRisk
+  );
+
+  const totalVolume = state.partners.reduce((s, p) => s + p.volume, 0);
+  const totalAccepted = state.partners.reduce((s, p) => s + p.acceptedReferrals, 0);
+  const overallConversion = totalVolume > 0 ? Math.round((totalAccepted / totalVolume) * 100) : 0;
+  const followUpsDue = state.partners.filter(p => p.nextFollowUpReminder <= new Date().toISOString().split('T')[0]).length;
+
+  return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-start mb-6">
         <div>
           <h2 className="page-title flex items-center gap-2">
             <Handshake size={22} className="text-advisa-accent" />
-            Referral Partner CRM
+            Referral Partners
           </h2>
-          <p className="text-xs text-slate-400 mt-1">{state.partners.length} partners · {totalVolume} referrals (30d)</p>
-        </div>
-        <button onClick={() => setShowAddForm(!showAddForm)} className="btn-primary"><Plus size={15} />Add Partner</button>
-      </div>
-
-      {/* Follow-up Reminders */}
-      {dueReminders.length > 0 && (
-        <div className="mb-5 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-          <p className="text-xs font-semibold text-amber-800 flex items-center gap-2 mb-1">
-            <AlertTriangle size={13} /> Follow-up Reminders Due
+          <p className="text-xs text-slate-400 mt-1">
+            {state.partners.length} partners · {totalVolume} referrals (30d) · {overallConversion}% conversion
+            {followUpsDue > 0 && <span className="text-amber-600"> · {followUpsDue} follow-up{followUpsDue > 1 ? 's' : ''} due</span>}
           </p>
-          <div className="space-y-1 text-xs text-amber-700">
-            {dueReminders.map(p => (
-              <p key={p.id}><strong>{p.name}</strong> — last contact: {p.lastFollowUp}</p>
-            ))}
-          </div>
         </div>
-      )}
+      </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-5">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
         <div className="stat-card">
-          <div className="w-8 h-8 bg-sky-50 rounded-lg flex items-center justify-center mb-2"><Users size={16} className="text-sky-600" /></div>
-          <p className="stat-label">Partners</p>
-          <p className="stat-value text-slate-800">{state.partners.length}</p>
+          <p className="stat-label">Total Volume (30d)</p>
+          <p className="stat-value text-sky-600">{totalVolume}</p>
         </div>
         <div className="stat-card">
-          <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center mb-2"><TrendingUp size={16} className="text-emerald-600" /></div>
-          <p className="stat-label">Accepted</p>
-          <p className="stat-value text-emerald-600">{totalAccepted}</p>
-        </div>
-        <div className="stat-card">
-          <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center mb-2"><XCircle size={16} className="text-red-600" /></div>
-          <p className="stat-label">Declined</p>
-          <p className="stat-value text-red-600">{totalDeclined}</p>
-        </div>
-        <div className="stat-card">
-          <div className="w-8 h-8 bg-violet-50 rounded-lg flex items-center justify-center mb-2"><BarChart3 size={16} className="text-violet-600" /></div>
           <p className="stat-label">Conversion</p>
-          <p className="stat-value text-violet-600">{overallConversion}%</p>
+          <p className={`stat-value ${overallConversion >= 70 ? 'text-emerald-600' : overallConversion >= 50 ? 'text-amber-600' : 'text-red-600'}`}>{overallConversion}%</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-label">At Risk Partners</p>
+          <p className="stat-value text-red-600">{state.partners.filter(p => p.riskLabel === 'At Risk' || p.riskLabel === 'Needs Attention').length}</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-label">Follow-ups Due</p>
+          <p className="stat-value text-amber-600">{followUpsDue}</p>
         </div>
       </div>
 
-      {/* Performance Chart */}
-      <div className="card mb-5">
-        <div className="card-header"><BarChart3 size={15} /> Partner Performance</div>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={chartData}>
-            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-            <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-            <Tooltip />
-            <Bar dataKey="Accepted" fill="#10b981" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="Declined" fill="#ef4444" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Add Form */}
-      {showAddForm && (
-        <div className="card mb-5 bg-sky-50/50 border-sky-200">
-          <p className="section-title mb-3">Add New Partner</p>
-          <div className="grid grid-cols-2 gap-3">
-            <input placeholder="Partner Name" className="input" value={newPartner.name} onChange={e => setNewPartner({ ...newPartner, name: e.target.value })} />
-            <select className="select" value={newPartner.type} onChange={e => setNewPartner({ ...newPartner, type: e.target.value as ReferralPartner['type'] })}>
-              <option>Hospital</option><option>Physician</option><option>Discharge Planner</option><option>Case Manager</option><option>Attorney</option>
-            </select>
-            <input placeholder="Contact Name" className="input" value={newPartner.contactName} onChange={e => setNewPartner({ ...newPartner, contactName: e.target.value })} />
-            <input placeholder="Email" type="email" className="input" value={newPartner.contactEmail} onChange={e => setNewPartner({ ...newPartner, contactEmail: e.target.value })} />
-            <input placeholder="Phone" className="input" value={newPartner.contactPhone} onChange={e => setNewPartner({ ...newPartner, contactPhone: e.target.value })} />
-            <input placeholder="Volume (30d)" type="number" className="input" value={newPartner.volume} onChange={e => setNewPartner({ ...newPartner, volume: e.target.value })} />
-          </div>
-          <div className="mt-3 flex gap-2">
-            <button onClick={handleAddPartner} className="btn-primary">Save</button>
-            <button onClick={() => setShowAddForm(false)} className="btn-secondary">Cancel</button>
-          </div>
-        </div>
-      )}
-
-      {/* Filter */}
-      <div className="mb-5">
-        <select className="select" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-          {types.map(t => <option key={t} value={t}>{t === 'All' ? 'All Types' : t}</option>)}
+      {/* Filters */}
+      <div className="flex gap-3 mb-5">
+        <select className="select" value={filterRisk} onChange={e => setFilterRisk(e.target.value as PartnerRiskLabel | 'All')}>
+          <option value="All">All Risk Labels</option>
+          <option value="Growing">Growing</option>
+          <option value="Stable">Stable</option>
+          <option value="Needs Attention">Needs Attention</option>
+          <option value="At Risk">At Risk</option>
         </select>
       </div>
 
-      {/* Table */}
+      {/* Partners Table */}
       <div className="card p-0 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr>
               <th className="table-head">Partner</th>
               <th className="table-head">Type</th>
-              <th className="table-head">Contact</th>
-              <th className="table-head">Volume</th>
+              <th className="table-head">Volume (30d)</th>
+              <th className="table-head">Accepted</th>
+              <th className="table-head">Declined</th>
               <th className="table-head">Conversion</th>
-              <th className="table-head">Avg SOC</th>
-              <th className="table-head">Last Follow-up</th>
+              <th className="table-head">Avg SOC Time</th>
+              <th className="table-head">Risk</th>
+              <th className="table-head">Next Follow-up</th>
               <th className="table-head">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((partner) => {
-              const convRate = partner.volume > 0 ? Math.round((partner.acceptedReferrals / partner.volume) * 100) : 0;
+            {filtered.map(p => {
+              const conv = p.volume > 0 ? Math.round((p.acceptedReferrals / p.volume) * 100) : 0;
+              const followUpDue = p.nextFollowUpReminder <= new Date().toISOString().split('T')[0];
               return (
-                <tr key={partner.id} className="hover:bg-slate-50 transition-colors">
+                <tr key={p.id} className={`hover:bg-slate-50 transition-colors ${followUpDue ? 'bg-amber-50/30' : ''}`}>
+                  <td className="table-cell font-semibold text-slate-800">{p.name}</td>
+                  <td className="table-cell"><span className="badge badge-info text-[10px]">{p.type}</span></td>
+                  <td className="table-cell">{p.volume}</td>
+                  <td className="table-cell text-emerald-600">{p.acceptedReferrals}</td>
+                  <td className="table-cell text-red-500">{p.declinedReferrals}</td>
                   <td className="table-cell">
-                    <p className="font-semibold text-slate-800">{partner.name}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{partner.notes.slice(0, 50)}{partner.notes.length > 50 ? '…' : ''}</p>
+                    <span className={`font-semibold ${conv >= 70 ? 'text-emerald-600' : conv >= 50 ? 'text-amber-600' : 'text-red-600'}`}>{conv}%</span>
                   </td>
-                  <td className="table-cell"><span className="badge badge-neutral">{partner.type}</span></td>
+                  <td className="table-cell text-slate-500">{p.avgTimeToSOC}</td>
                   <td className="table-cell">
-                    <div className="text-xs space-y-0.5">
-                      <p className="font-medium text-slate-700">{partner.contactName}</p>
-                      <p className="text-slate-400 flex items-center gap-1"><Mail size={10} />{partner.contactEmail}</p>
-                      <p className="text-slate-400 flex items-center gap-1"><Phone size={10} />{partner.contactPhone}</p>
-                    </div>
+                    <span className={`badge ${riskLabelColors[p.riskLabel]} flex items-center gap-1 w-fit`}>
+                      {riskLabelIcons[p.riskLabel]} {p.riskLabel}
+                    </span>
                   </td>
-                  <td className="table-cell font-semibold">{partner.volume}</td>
                   <td className="table-cell">
-                    <div className="text-xs">
-                      <span className="font-semibold text-emerald-600">{convRate}%</span>
-                      <span className="text-slate-400 ml-1">({partner.acceptedReferrals}/{partner.volume})</span>
-                    </div>
+                    <span className={followUpDue ? 'text-amber-600 font-medium' : 'text-slate-500'}>
+                      {p.nextFollowUpReminder}
+                      {followUpDue && <AlertTriangle size={10} className="inline ml-1 text-amber-500" />}
+                    </span>
                   </td>
-                  <td className="table-cell text-slate-500">{partner.avgTimeToSOC}</td>
-                  <td className="table-cell text-slate-500 text-xs">{partner.lastFollowUp}</td>
                   <td className="table-cell">
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => handleFollowUp(partner.id)} className="btn-primary text-xs py-1 px-2.5">Follow Up</button>
-                      <button onClick={() => setSelectedPartner(selectedPartner === partner.id ? null : partner.id)}
-                        className="text-advisa-accent hover:text-advisa-accent-dark transition-colors">
-                        {selectedPartner === partner.id ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                      </button>
-                    </div>
+                    <button onClick={() => setSelectedPartner(p)} className="text-advisa-accent hover:text-advisa-accent-dark">
+                      <Eye size={15} />
+                    </button>
                   </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
+        {filtered.length === 0 && <div className="text-center py-12 text-slate-400 text-sm">No partners match your filters</div>}
       </div>
 
-      {/* Partner Detail / Scorecard */}
-      {selectedPartner && (() => {
-        const partner = state.partners.find(p => p.id === selectedPartner);
-        if (!partner) return null;
-        const convRate = partner.volume > 0 ? Math.round((partner.acceptedReferrals / partner.volume) * 100) : 0;
-        return (
-          <div className="card mt-5 bg-sky-50/50 border-sky-200">
-            <p className="section-title mb-3">{partner.name} — Scorecard</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
-              <div className="p-3 bg-white rounded-lg border border-advisa-border">
-                <p className="stat-label">Referrals Sent</p>
-                <p className="text-lg font-bold text-slate-800">{partner.volume}</p>
-              </div>
-              <div className="p-3 bg-white rounded-lg border border-advisa-border">
-                <p className="stat-label">Accepted</p>
-                <p className="text-lg font-bold text-emerald-600 flex items-center gap-1"><CheckCircle size={14} /> {partner.acceptedReferrals}</p>
-              </div>
-              <div className="p-3 bg-white rounded-lg border border-advisa-border">
-                <p className="stat-label">Declined</p>
-                <p className="text-lg font-bold text-red-600 flex items-center gap-1"><XCircle size={14} /> {partner.declinedReferrals}</p>
-              </div>
-              <div className="p-3 bg-white rounded-lg border border-advisa-border">
-                <p className="stat-label">Conversion</p>
-                <p className="text-lg font-bold text-violet-600">{convRate}%</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-              <div>
-                <p className="stat-label">Avg SOC</p>
-                <p className="font-medium text-slate-700">{partner.avgTimeToSOC}</p>
-              </div>
-              <div>
-                <p className="stat-label">Lost Reasons</p>
-                {partner.lostReasons.length > 0 ? (
-                  <div className="flex flex-wrap gap-1 mt-0.5">
-                    {partner.lostReasons.map(r => <span key={r} className="badge badge-urgent text-[10px]">{r}</span>)}
-                  </div>
-                ) : <span className="text-slate-400">None</span>}
-              </div>
-            </div>
-
-            {/* Timeline */}
-            <p className="stat-label mb-2">Activity Timeline</p>
-            <div className="space-y-2">
-              {partner.timeline.slice(0, 10).map((entry, idx) => (
-                <div key={idx} className="flex items-center gap-3 text-xs">
-                  <Calendar size={11} className="text-slate-400 flex-shrink-0" />
-                  <span className="text-slate-400 w-20">{entry.date}</span>
-                  <span className="text-slate-600">{entry.action}</span>
-                  <span className="text-slate-400">by {entry.user}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
+      {/* Detail Drawer */}
+      {selectedPartner && (
+        <PartnerDetailDrawer partner={selectedPartner} onClose={() => setSelectedPartner(null)} />
+      )}
     </div>
   );
 }
