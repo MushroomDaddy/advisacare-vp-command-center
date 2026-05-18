@@ -1,325 +1,308 @@
 import { useAppState } from '../context/AppContext';
-import { exportToCSV } from '../lib/csvUtils';
-import { useMemo } from 'react';
+import { calculateDashboardKPIs, getComplianceStatus } from '../utils/dataLogic';
+import { getDaysUntilExpiry } from '../lib/dateUtils';
+import { useState } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
-} from 'recharts';
-import {
-  Inbox, AlertTriangle, FileWarning, UserCheck, ShieldAlert,
-  IdCard, Clock, ClipboardCheck, CalendarCheck, Download,
-  TrendingUp, Activity, Target, Zap,
+  LayoutDashboard, AlertTriangle, Clock, TrendingUp, TrendingDown,
+  FileText, Users, ShieldCheck, Star, Activity, Monitor, Minus
 } from 'lucide-react';
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip,
+  PieChart, Pie, Cell
+} from 'recharts';
 
-const PIE_COLORS = { compliant: '#059669', dueSoon: '#d97706', expired: '#dc2626' };
-const BAR_RISK = { Low: '#059669', Medium: '#d97706', High: '#dc2626' };
+const COLORS = ['#0ea5e9', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
 
 export default function Dashboard() {
-  const { state, getComplianceStatus } = useAppState();
-  
-  const handleExport = () => {
-    const columns = ['Patient Initials', 'Service Type', 'Urgency', 'Source', 'Stage', 'Insurance Status'];
-    const data = state.referrals.map(r => ({
-      'Patient Initials': r.patientInitials,
-      'Service Type': r.serviceType,
-      'Urgency': r.urgency,
-      'Source': r.source,
-      'Stage': r.stage,
-      'Insurance Status': r.insuranceStatus,
-    }));
-    exportToCSV(columns, data, 'advisacare-referrals.csv');
+  const { state } = useAppState();
+  const [branchFilter, setBranchFilter] = useState('All');
+  const [serviceFilter, setServiceFilter] = useState('All');
+  const [wallboardMode, setWallboardMode] = useState(false);
+
+  const branches = ['All', ...new Set(state.referrals.map(r => r.branch))];
+  const serviceTypes = ['All', ...new Set(state.referrals.map(r => r.serviceType))];
+
+  // Filtered referrals
+  const filteredReferrals = state.referrals.filter(r =>
+    (branchFilter === 'All' || r.branch === branchFilter) &&
+    (serviceFilter === 'All' || r.serviceType === serviceFilter)
+  );
+
+  const kpis = calculateDashboardKPIs(filteredReferrals, state.staff, state.compliance, state.quality);
+
+  // Compliance counts using calculated status
+  const complianceCounts = {
+    expired: state.compliance.filter(c => getComplianceStatus(c) === 'Expired').length,
+    criticalSoon: state.compliance.filter(c => getComplianceStatus(c) === 'Critical Soon').length,
+    dueSoon: state.compliance.filter(c => getComplianceStatus(c) === 'Due Soon').length,
+    compliant: state.compliance.filter(c => getComplianceStatus(c) === 'Compliant').length,
   };
-  
-  const stats = useMemo(() => {
-    const newReferrals = state.referrals.filter(r => {
-      const d = new Date(r.createdAt);
-      const now = new Date();
-      return (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24) <= 1;
-    }).length;
-    
-    const urgentReferrals = state.referrals.filter(r => r.urgency === 'Immediate' || r.urgency === 'Urgent 24-48 hours').length;
-    const missingDocs = state.referrals.filter(r => r.stage === 'Missing Docs').length;
-    const openShifts = state.staff.filter(s => s.availability === 'Available').length;
-    const highRisk = state.staff.filter(s => s.overtimeRisk === 'High').length;
-    const expired = state.compliance.filter(c => getComplianceStatus(c) === 'Expired').length;
-    const dueSoon = state.compliance.filter(c => getComplianceStatus(c) === 'Due Soon').length;
-    const pendingQA = state.quality.filter(q => q.status === 'Open').length;
-    const openSOC = state.referrals.filter(r => r.stage === 'Scheduled' || r.stage === 'Started').length;
-    
-    return { newReferrals, urgentReferrals, missingDocs, openShifts, highRisk, expired, dueSoon, pendingQA, openSOC };
-  }, [state, getComplianceStatus]);
 
-  const pipelineData = useMemo(() => {
-    const stages = ['New', 'Missing Docs', 'Eligibility', 'Staffing', 'Scheduled', 'Started', 'Declined'];
-    return stages.map(stage => ({
-      stage: stage === 'Missing Docs' ? 'Missing\nDocs' : stage,
-      count: state.referrals.filter(r => r.stage === stage).length,
-    }));
-  }, [state.referrals]);
-
-  const complianceDonut = useMemo(() => {
-    const compliant = state.compliance.filter(c => getComplianceStatus(c) === 'Compliant').length;
-    const dueSoon = state.compliance.filter(c => getComplianceStatus(c) === 'Due Soon').length;
-    const expired = state.compliance.filter(c => getComplianceStatus(c) === 'Expired').length;
-    return [
-      { name: 'Compliant', value: compliant, color: PIE_COLORS.compliant },
-      { name: 'Due Soon', value: dueSoon, color: PIE_COLORS.dueSoon },
-      { name: 'Expired', value: expired, color: PIE_COLORS.expired },
-    ].filter(d => d.value > 0);
-  }, [state.compliance, getComplianceStatus]);
-
-  const staffWorkload = useMemo(() => {
-    return state.staff.map(s => ({
-      name: s.name.split(' ')[0],
-      visits: s.todayVisits,
-      risk: s.overtimeRisk,
-    }));
-  }, [state.staff]);
-
-  const qualityByType = useMemo(() => {
-    const types = ['OASIS Due', 'QA Review', 'Readmission Follow-up', 'Hospice Comfort', 'CAHPS Follow-up', 'Missed Visit', 'Late Note'];
-    return types.map(type => ({
-      type: type.replace(' Follow-up', '').replace(' Due', ''),
-      open: state.quality.filter(q => q.type === type && q.status === 'Open').length,
-      inProgress: state.quality.filter(q => q.type === type && q.status === 'In Progress').length,
-      complete: state.quality.filter(q => q.type === type && q.status === 'Complete').length,
-    })).filter(d => d.open + d.inProgress + d.complete > 0);
-  }, [state.quality]);
-
-  const urgentActivities = useMemo(() => {
-    const activities: { text: string; severity: 'critical' | 'high' | 'medium' }[] = [];
-    
-    state.referrals.filter(r => r.urgency === 'Immediate').forEach(r => {
-      activities.push({ text: `${r.patientInitials} (${r.serviceType}) — Immediate urgency`, severity: 'critical' });
-    });
-    
-    state.compliance.filter(c => getComplianceStatus(c) === 'Expired').forEach(c => {
-      activities.push({ text: `${c.staffName} — ${c.itemType} expired`, severity: 'high' });
-    });
-    
-    state.quality.filter(q => q.priority === 'High' && q.status === 'Open').forEach(q => {
-      activities.push({ text: `${q.type} for ${q.patientInitials} — High priority`, severity: 'medium' });
-    });
-    
-    return activities.slice(0, 5);
-  }, [state, getComplianceStatus]);
-
-  const kpiCards = [
-    { label: 'New Referrals', sub: '24h', value: stats.newReferrals, color: 'text-sky-600', bg: 'bg-sky-50', icon: Inbox },
-    { label: 'Urgent Referrals', value: stats.urgentReferrals, color: 'text-red-600', bg: 'bg-red-50', icon: AlertTriangle },
-    { label: 'Missing Docs', value: stats.missingDocs, color: 'text-amber-600', bg: 'bg-amber-50', icon: FileWarning },
-    { label: 'Open Shifts', sub: 'Today', value: stats.openShifts, color: 'text-violet-600', bg: 'bg-violet-50', icon: UserCheck },
-    { label: 'High-Risk Staff', value: stats.highRisk, color: 'text-red-600', bg: 'bg-red-50', icon: ShieldAlert },
-    { label: 'Expired Licenses', value: stats.expired, color: 'text-red-600', bg: 'bg-red-50', icon: IdCard },
-    { label: 'Due Soon', value: stats.dueSoon, color: 'text-amber-600', bg: 'bg-amber-50', icon: Clock },
-    { label: 'Pending QA', value: stats.pendingQA, color: 'text-orange-600', bg: 'bg-orange-50', icon: ClipboardCheck },
-    { label: 'SOC Active', value: stats.openSOC, color: 'text-emerald-600', bg: 'bg-emerald-50', icon: CalendarCheck },
+  // Referral pipeline data for chart
+  const pipelineData = [
+    { stage: 'New', count: filteredReferrals.filter(r => r.stage === 'New').length },
+    { stage: 'Missing Docs', count: filteredReferrals.filter(r => r.stage === 'Missing Docs').length },
+    { stage: 'Eligibility', count: filteredReferrals.filter(r => r.stage === 'Eligibility').length },
+    { stage: 'Staffing', count: filteredReferrals.filter(r => r.stage === 'Staffing').length },
+    { stage: 'Scheduled', count: filteredReferrals.filter(r => r.stage === 'Scheduled').length },
+    { stage: 'Started', count: filteredReferrals.filter(r => r.stage === 'Started').length },
   ];
 
-  const tooltipStyle = {
-    borderRadius: '8px',
-    border: '1px solid #e2e8f0',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-    fontSize: '12px',
+  // Service distribution for pie chart
+  const serviceDistData = serviceTypes.filter(s => s !== 'All').map(s => ({
+    name: s,
+    value: filteredReferrals.filter(r => r.serviceType === s).length,
+  })).filter(d => d.value > 0);
+
+  // Stuck referrals by owner
+  const now = new Date();
+  const stuckByOwner = filteredReferrals
+    .filter(r => {
+      if (r.stage === 'Started' || r.stage === 'Declined') return false;
+      const hours = (now.getTime() - new Date(r.createdAt).getTime()) / (1000 * 60 * 60);
+      return hours > 48;
+    })
+    .reduce<Record<string, number>>((acc, r) => {
+      acc[r.assignedOwner] = (acc[r.assignedOwner] || 0) + 1;
+      return acc;
+    }, {});
+
+  // SLA breaches
+  const slaBreaches = filteredReferrals.filter(r => {
+    if (r.stage === 'Started' || r.stage === 'Declined') return false;
+    const daysLeft = getDaysUntilExpiry(r.slaDeadline);
+    return daysLeft <= 1;
+  });
+
+  // Late notes
+  const lateNotes = state.quality.filter(q => q.type === 'Late Note' && q.status !== 'Complete');
+
+  // Quality risk score (simple: high-priority open items / total items * 100)
+  const openHighPriority = state.quality.filter(q => q.priority === 'High' && q.status !== 'Complete').length;
+  const qualityRiskScore = state.quality.length > 0
+    ? Math.round((openHighPriority / state.quality.length) * 100)
+    : 0;
+
+  // Trend placeholders (since we have demo data, show static deltas)
+  const trendDelta = (val: number): { icon: React.ReactNode; label: string; color: string } => {
+    if (val > 0) return { icon: <TrendingUp size={11} />, label: `+${val}`, color: 'text-red-500' };
+    if (val < 0) return { icon: <TrendingDown size={11} />, label: `${val}`, color: 'text-emerald-500' };
+    return { icon: <Minus size={11} />, label: '0', color: 'text-slate-400' };
   };
+
+  if (wallboardMode) {
+    return (
+      <div className="fixed inset-0 bg-slate-900 text-white z-50 p-8 overflow-auto">
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold tracking-tight">AdvisaCare — Executive Wallboard</h1>
+          <button onClick={() => setWallboardMode(false)} className="btn-secondary text-xs bg-slate-700 border-slate-600 text-white hover:bg-slate-600">
+            Exit Wallboard
+          </button>
+        </div>
+        <div className="grid grid-cols-4 gap-6 mb-8">
+          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+            <p className="text-slate-400 text-sm">New Referrals (24h)</p>
+            <p className="text-4xl font-bold mt-2">{kpis.newReferrals24h}</p>
+          </div>
+          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+            <p className="text-slate-400 text-sm">Urgent Referrals</p>
+            <p className="text-4xl font-bold mt-2 text-red-400">{kpis.urgentReferrals}</p>
+          </div>
+          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+            <p className="text-slate-400 text-sm">Open Shifts</p>
+            <p className="text-4xl font-bold mt-2 text-amber-400">{kpis.openShifts}</p>
+          </div>
+          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+            <p className="text-slate-400 text-sm">Quality Risk</p>
+            <p className="text-4xl font-bold mt-2 text-sky-400">{qualityRiskScore}%</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-6">
+          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+            <p className="text-sm font-semibold text-slate-300 mb-4">Referral Pipeline</p>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={pipelineData}>
+                <XAxis dataKey="stage" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                <Bar dataKey="count" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+            <p className="text-sm font-semibold text-slate-300 mb-4">SLA Breaches</p>
+            {slaBreaches.length === 0 ? (
+              <p className="text-slate-500 text-sm">No SLA breaches</p>
+            ) : (
+              <div className="space-y-2">
+                {slaBreaches.map(r => (
+                  <div key={r.id} className="flex justify-between text-sm">
+                    <span>{r.patientInitials} — {r.source}</span>
+                    <span className="text-red-400">{r.stage}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
-      {/* Page Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-start mb-6">
         <div>
           <h2 className="page-title flex items-center gap-2">
-            <Activity size={22} className="text-advisa-accent" />
-            Executive Morning Brief
+            <LayoutDashboard size={22} className="text-advisa-accent" />
+            VP Operations Dashboard
           </h2>
-          <p className="text-xs text-slate-400 mt-1">Real-time operational overview</p>
+          <p className="text-xs text-slate-400 mt-1">
+            {filteredReferrals.length} referrals · {state.staff.length} staff · {state.quality.length} quality items
+          </p>
         </div>
-        <button onClick={handleExport} className="btn-secondary">
-          <Download size={15} />
-          Export CSV
-        </button>
-      </div>
-      
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-3 mb-6">
-        {kpiCards.map((card) => {
-          const Icon = card.icon;
-          return (
-            <div key={card.label} className="stat-card">
-              <div className={`w-8 h-8 ${card.bg} rounded-lg flex items-center justify-center mb-2`}>
-                <Icon size={16} className={card.color} />
-              </div>
-              <p className="stat-label">{card.label}</p>
-              {card.sub && <p className="text-[10px] text-slate-400">{card.sub}</p>}
-              <p className={`stat-value ${card.color}`}>{card.value}</p>
-            </div>
-          );
-        })}
+        <div className="flex items-center gap-2">
+          <select className="select text-xs" value={branchFilter} onChange={e => setBranchFilter(e.target.value)}>
+            {branches.map(b => <option key={b} value={b}>{b === 'All' ? 'All Branches' : b}</option>)}
+          </select>
+          <select className="select text-xs" value={serviceFilter} onChange={e => setServiceFilter(e.target.value)}>
+            {serviceTypes.map(s => <option key={s} value={s}>{s === 'All' ? 'All Services' : s}</option>)}
+          </select>
+          <button onClick={() => setWallboardMode(true)} className="btn-secondary text-xs py-1.5" title="Executive Wallboard">
+            <Monitor size={13} /> Wallboard
+          </button>
+        </div>
       </div>
 
-      {/* Charts Row 1 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-        <div className="card">
-          <div className="card-header">
-            <TrendingUp size={16} />
-            Referral Pipeline
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+        <div className="stat-card">
+          <div className="flex items-center gap-2 mb-1"><FileText size={14} className="text-sky-500" /><p className="stat-label">New Referrals</p></div>
+          <p className="stat-value text-sky-600">{kpis.newReferrals24h}</p>
+          <div className={`flex items-center gap-1 mt-1 text-[10px] ${trendDelta(2).color}`}>{trendDelta(2).icon} {trendDelta(2).label} vs 7d avg</div>
+        </div>
+        <div className="stat-card">
+          <div className="flex items-center gap-2 mb-1"><AlertTriangle size={14} className="text-red-500" /><p className="stat-label">Urgent Referrals</p></div>
+          <p className="stat-value text-red-600">{kpis.urgentReferrals}</p>
+          <div className={`flex items-center gap-1 mt-1 text-[10px] ${trendDelta(1).color}`}>{trendDelta(1).icon} {trendDelta(1).label} vs yesterday</div>
+        </div>
+        <div className="stat-card">
+          <div className="flex items-center gap-2 mb-1"><Users size={14} className="text-amber-500" /><p className="stat-label">Open Shifts</p></div>
+          <p className="stat-value text-amber-600">{kpis.openShifts}</p>
+          <div className={`flex items-center gap-1 mt-1 text-[10px] ${trendDelta(0).color}`}>{trendDelta(0).icon} {trendDelta(0).label} vs yesterday</div>
+        </div>
+        <div className="stat-card">
+          <div className="flex items-center gap-2 mb-1"><Star size={14} className="text-violet-500" /><p className="stat-label">Quality Risk</p></div>
+          <p className="stat-value text-violet-600">{qualityRiskScore}%</p>
+          <div className={`flex items-center gap-1 mt-1 text-[10px] ${trendDelta(-5).color}`}>{trendDelta(-5).icon} {trendDelta(-5).label}% vs 30d</div>
+        </div>
+      </div>
+
+      {/* Urgent Activity */}
+      {(slaBreaches.length > 0 || complianceCounts.expired > 0 || lateNotes.length > 0) && (
+        <div className="mb-5 p-4 bg-red-50 border border-red-200 rounded-lg" data-testid="urgent-activity">
+          <p className="text-sm font-semibold text-red-800 flex items-center gap-2 mb-2">
+            <AlertTriangle size={14} /> Urgent Activity
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            {slaBreaches.length > 0 && (
+              <div className="text-red-700">
+                <p className="font-medium">{slaBreaches.length} SLA breach{slaBreaches.length > 1 ? 'es' : ''}</p>
+                {slaBreaches.slice(0, 3).map(r => (
+                  <p key={r.id} className="text-red-600 mt-0.5">{r.patientInitials} — {r.source}</p>
+                ))}
+              </div>
+            )}
+            {complianceCounts.expired > 0 && (
+              <div className="text-red-700">
+                <p className="font-medium">{complianceCounts.expired} expired credential{complianceCounts.expired > 1 ? 's' : ''}</p>
+                <p className="text-red-600 mt-0.5">{complianceCounts.criticalSoon} critical soon</p>
+              </div>
+            )}
+            {lateNotes.length > 0 && (
+              <div className="text-red-700">
+                <p className="font-medium">{lateNotes.length} late note{lateNotes.length > 1 ? 's' : ''}</p>
+                {lateNotes.slice(0, 2).map(n => (
+                  <p key={n.id} className="text-red-600 mt-0.5">{n.patientInitials} — {n.assignedTo}</p>
+                ))}
+              </div>
+            )}
           </div>
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={pipelineData} margin={{ top: 5, right: 16, left: -8, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis dataKey="stage" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="count" fill="#0ea5e9" radius={[5, 5, 0, 0]} name="Referrals" maxBarSize={40} />
+        </div>
+      )}
+
+      {/* Charts Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+        <div className="card">
+          <div className="card-header"><Activity size={15} />Referral Pipeline</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={pipelineData}>
+              <XAxis dataKey="stage" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+              <Tooltip />
+              <Bar dataKey="count" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
-
         <div className="card">
-          <div className="card-header">
-            <Target size={16} />
-            Compliance Overview
-          </div>
-          <ResponsiveContainer width="100%" height={240}>
+          <div className="card-header"><TrendingUp size={15} />Service Distribution</div>
+          <ResponsiveContainer width="100%" height={200}>
             <PieChart>
-              <Pie
-                data={complianceDonut}
-                cx="50%"
-                cy="50%"
-                innerRadius={58}
-                outerRadius={90}
-                paddingAngle={4}
-                dataKey="value"
-                strokeWidth={0}
-              >
-                {complianceDonut.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
+              <Pie data={serviceDistData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, value }) => `${name}: ${value}`}>
+                {serviceDistData.map((_entry, index) => (
+                  <Cell key={index} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} />
-              <Legend
-                verticalAlign="middle"
-                align="right"
-                layout="vertical"
-                iconType="circle"
-                iconSize={8}
-                formatter={(value: string) => (
-                  <span style={{ color: '#475569', fontSize: '12px', fontWeight: 500 }}>{value}</span>
-                )}
-              />
+              <Tooltip />
             </PieChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Charts Row 2 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+      {/* Bottom Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {/* Stuck Referrals */}
         <div className="card">
-          <div className="card-header">
-            <UserCheck size={16} />
-            Staff Workload Today
-          </div>
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={staffWorkload} margin={{ top: 5, right: 16, left: -8, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="visits" name="Visits" radius={[5, 5, 0, 0]} maxBarSize={36}>
-                {staffWorkload.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={BAR_RISK[entry.risk as keyof typeof BAR_RISK] || '#0ea5e9'} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          <div className="flex gap-5 mt-1 text-[10px] text-slate-500 justify-center">
-            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-600" /> Low Risk</span>
-            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-600" /> Medium</span>
-            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-600" /> High</span>
+          <div className="card-header"><Clock size={15} />Stuck Referrals by Owner</div>
+          {Object.keys(stuckByOwner).length === 0 ? (
+            <p className="text-xs text-slate-400">No stuck referrals</p>
+          ) : (
+            <div className="space-y-2 text-sm">
+              {Object.entries(stuckByOwner).map(([owner, count]) => (
+                <div key={owner} className="flex justify-between items-center">
+                  <span className="text-slate-600">{owner}</span>
+                  <span className="badge badge-warning">{count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Compliance Summary */}
+        <div className="card">
+          <div className="card-header"><ShieldCheck size={15} />Compliance Summary</div>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-red-600">Expired</span><span className="font-semibold">{complianceCounts.expired}</span></div>
+            <div className="flex justify-between"><span className="text-orange-600">Critical Soon</span><span className="font-semibold">{complianceCounts.criticalSoon}</span></div>
+            <div className="flex justify-between"><span className="text-amber-600">Due Soon</span><span className="font-semibold">{complianceCounts.dueSoon}</span></div>
+            <div className="flex justify-between"><span className="text-emerald-600">Compliant</span><span className="font-semibold">{complianceCounts.compliant}</span></div>
           </div>
         </div>
 
+        {/* High-Acuity Uncovered */}
         <div className="card">
-          <div className="card-header">
-            <ClipboardCheck size={16} />
-            Quality Items by Type
-          </div>
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={qualityByType} margin={{ top: 5, right: 16, left: -8, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis dataKey="type" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="open" stackId="a" fill="#dc2626" name="Open" maxBarSize={36} />
-              <Bar dataKey="inProgress" stackId="a" fill="#d97706" name="In Progress" />
-              <Bar dataKey="complete" stackId="a" fill="#059669" name="Complete" radius={[5, 5, 0, 0]} />
-              <Legend iconType="circle" iconSize={8}
-                formatter={(value: string) => (
-                  <span style={{ color: '#475569', fontSize: '11px', fontWeight: 500 }}>{value}</span>
-                )}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Urgent + Milestones */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-        <div className="card">
-          <div className="card-header">
-            <Zap size={16} className="text-red-500" />
-            <span className="text-red-700">Urgent Activity</span>
-          </div>
-          <ul className="space-y-2">
-            {urgentActivities.map((activity, i) => (
-              <li key={i} className="flex items-start gap-3 text-xs">
-                <span className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${
-                  activity.severity === 'critical' ? 'bg-red-500' : activity.severity === 'high' ? 'bg-amber-500' : 'bg-orange-400'
-                }`} />
-                <span className="text-slate-600 leading-relaxed">{activity.text}</span>
-              </li>
-            ))}
-            {urgentActivities.length === 0 && (
-              <li className="text-xs text-slate-400">No urgent activities</li>
-            )}
-          </ul>
-        </div>
-
-        <div className="card">
-          <div className="card-header">
-            <CalendarCheck size={16} />
-            Today's Milestones
-          </div>
-          <ul className="space-y-2">
-            {[
-              { label: 'SOCs scheduled today', value: state.referrals.filter(r => r.stage === 'Scheduled').length },
-              { label: 'QA reviews completed', value: state.quality.filter(q => q.status === 'Complete').length },
-              { label: 'Visits documented', value: state.visits.filter(v => v.documentationStatus === 'Complete').length },
-              { label: 'Staff available now', value: state.staff.filter(s => s.availability === 'Available').length },
-            ].map((item, i) => (
-              <li key={i} className="flex items-center gap-3 text-xs">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
-                <span className="text-slate-600">{item.value} {item.label}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="card bg-gradient-to-r from-advisa-primary to-advisa-secondary border-0 text-white">
-        <p className="text-xs font-semibold uppercase tracking-wider text-sky-300 mb-3">Quick Actions</p>
-        <div className="flex flex-wrap gap-2">
-          {[
-            { label: 'Urgent Referrals', href: '/referrals' },
-            { label: 'Staffing Gaps', href: '/staffing' },
-            { label: 'Compliance Review', href: '/compliance' },
-            { label: 'Audit Log', href: '/audit-log' },
-          ].map(({ label, href }) => (
-            <a key={label} href={href} className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-medium transition-colors border border-white/10">
-              {label}
-            </a>
-          ))}
+          <div className="card-header"><AlertTriangle size={15} />Uncovered High-Acuity</div>
+          {filteredReferrals.filter(r => r.urgency === 'Immediate' && r.stage === 'Staffing').length === 0 ? (
+            <p className="text-xs text-slate-400">No uncovered high-acuity cases</p>
+          ) : (
+            <div className="space-y-2 text-sm">
+              {filteredReferrals.filter(r => r.urgency === 'Immediate' && r.stage === 'Staffing').map(r => (
+                <div key={r.id} className="flex justify-between items-center">
+                  <span className="text-slate-700 font-medium">{r.patientInitials}</span>
+                  <span className="badge badge-urgent">{r.serviceType}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

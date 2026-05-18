@@ -1,125 +1,238 @@
-/* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import type { AppState, Referral, QualityItem, AuditEntry, ComplianceItem, StaffMember } from '../types';
+import { createContext, useContext, useReducer, type ReactNode } from 'react';
+import type {
+  AppState, UserRole, QualityStatus, Referral, ReferralPartner,
+  AuditEntry, AlertItem, FieldVisit, StaffMember, QualityItem,
+  ComplianceItem, OASISAssessment, HOPEAssessment
+} from '../types';
 import { getInitialState } from '../data/seedData';
-import { calculateDashboardKPIs, findBestMatchStaff, getSOCDaysUntilDeadline, getComplianceStatus as getNewComplianceStatus, type ComplianceCategory, type StaffScore, type DashboardKPIs } from '../utils/dataLogic';
+import { getComplianceStatus } from '../utils/dataLogic';
 
-// --- Context Type ---
-interface AppContextType {
+// --- Action Types ---
+type Action =
+  | { type: 'SET_ROLE'; role: UserRole }
+  | { type: 'UPDATE_REFERRAL_STAGE'; id: string; stage: Referral['stage'] }
+  | { type: 'UPDATE_REFERRAL'; id: string; updates: Partial<Referral> }
+  | { type: 'ADD_REFERRAL'; referral: Referral }
+  | { type: 'UPDATE_VISIT_CHECKLIST'; visitId: string; taskIndex: number; completed: boolean }
+  | { type: 'UPDATE_VISIT'; visitId: string; updates: Partial<FieldVisit> }
+  | { type: 'UPDATE_QUALITY_STATUS'; id: string; status: QualityStatus }
+  | { type: 'ADD_QUALITY_ITEM'; item: QualityItem }
+  | { type: 'UPDATE_STAFF'; staffId: string; updates: Partial<StaffMember> }
+  | { type: 'ADD_PARTNER'; partner: ReferralPartner }
+  | { type: 'UPDATE_PARTNER'; id: string; updates: Partial<ReferralPartner> }
+  | { type: 'ADD_AUDIT_ENTRY'; entry: Omit<AuditEntry, 'id' | 'timestamp'> }
+  | { type: 'ADD_ALERT'; alert: Omit<AlertItem, 'id'> }
+  | { type: 'ACKNOWLEDGE_ALERT'; alertId: string }
+  | { type: 'UPDATE_OASIS'; id: string; updates: Partial<OASISAssessment> }
+  | { type: 'UPDATE_HOPE'; id: string; updates: Partial<HOPEAssessment> }
+  | { type: 'UPDATE_COMPLIANCE'; id: string; updates: Partial<ComplianceItem> }
+  | { type: 'REFRESH_TIMESTAMP' };
+
+function appReducer(state: AppState, action: Action): AppState {
+  switch (action.type) {
+    case 'SET_ROLE':
+      return { ...state, currentUser: { ...state.currentUser, role: action.role } };
+
+    case 'UPDATE_REFERRAL_STAGE':
+      return {
+        ...state,
+        referrals: state.referrals.map(r =>
+          r.id === action.id ? { ...r, stage: action.stage } : r
+        ),
+      };
+
+    case 'UPDATE_REFERRAL':
+      return {
+        ...state,
+        referrals: state.referrals.map(r =>
+          r.id === action.id ? { ...r, ...action.updates } : r
+        ),
+      };
+
+    case 'ADD_REFERRAL':
+      return { ...state, referrals: [...state.referrals, action.referral] };
+
+    case 'UPDATE_VISIT_CHECKLIST':
+      return {
+        ...state,
+        visits: state.visits.map(v =>
+          v.id === action.visitId
+            ? {
+              ...v,
+              checklist: v.checklist.map((t, i) =>
+                i === action.taskIndex ? { ...t, completed: action.completed } : t
+              ),
+            }
+            : v
+        ),
+      };
+
+    case 'UPDATE_VISIT':
+      return {
+        ...state,
+        visits: state.visits.map(v =>
+          v.id === action.visitId ? { ...v, ...action.updates } : v
+        ),
+      };
+
+    case 'UPDATE_QUALITY_STATUS':
+      return {
+        ...state,
+        quality: state.quality.map(q =>
+          q.id === action.id ? { ...q, status: action.status } : q
+        ),
+      };
+
+    case 'ADD_QUALITY_ITEM':
+      return { ...state, quality: [...state.quality, action.item] };
+
+    case 'UPDATE_STAFF':
+      return {
+        ...state,
+        staff: state.staff.map(s =>
+          s.id === action.staffId ? { ...s, ...action.updates } : s
+        ),
+      };
+
+    case 'ADD_PARTNER':
+      return { ...state, partners: [...state.partners, action.partner] };
+
+    case 'UPDATE_PARTNER':
+      return {
+        ...state,
+        partners: state.partners.map(p =>
+          p.id === action.id ? { ...p, ...action.updates } : p
+        ),
+      };
+
+    case 'ADD_AUDIT_ENTRY': {
+      const entry: AuditEntry = {
+        ...action.entry,
+        id: 'a' + Date.now(),
+        timestamp: new Date().toISOString(),
+      };
+      return { ...state, auditLog: [entry, ...state.auditLog] };
+    }
+
+    case 'ADD_ALERT': {
+      const alert: AlertItem = {
+        ...action.alert,
+        id: 'al' + Date.now(),
+      };
+      return { ...state, alerts: [alert, ...state.alerts] };
+    }
+
+    case 'ACKNOWLEDGE_ALERT':
+      return {
+        ...state,
+        alerts: state.alerts.map(a =>
+          a.id === action.alertId ? { ...a, acknowledged: true } : a
+        ),
+      };
+
+    case 'UPDATE_OASIS':
+      return {
+        ...state,
+        oasisAssessments: state.oasisAssessments.map(o =>
+          o.id === action.id ? { ...o, ...action.updates } : o
+        ),
+      };
+
+    case 'UPDATE_HOPE':
+      return {
+        ...state,
+        hopeAssessments: state.hopeAssessments.map(h =>
+          h.id === action.id ? { ...h, ...action.updates } : h
+        ),
+      };
+
+    case 'UPDATE_COMPLIANCE':
+      return {
+        ...state,
+        compliance: state.compliance.map(c =>
+          c.id === action.id ? { ...c, ...action.updates } : c
+        ),
+      };
+
+    case 'REFRESH_TIMESTAMP':
+      return { ...state, lastRefreshed: new Date().toISOString() };
+
+    default:
+      return state;
+  }
+}
+
+// --- Context Shape ---
+interface AppContextValue {
   state: AppState;
+  // Role
+  setCurrentRole: (role: UserRole) => void;
+  // Referrals
   updateReferralStage: (id: string, stage: Referral['stage']) => void;
-  updateVisitChecklist: (visitId: string, taskIndex: number) => void;
-  updateVisitNotes: (visitId: string, notes: string) => void;
-  addIncidentReport: (report: Omit<QualityItem, 'id'>) => void;
-  updateQualityStatus: (id: string, status: QualityItem['status']) => void;
-  addAuditEntry: (entry: Omit<AuditEntry, 'id' | 'timestamp'>) => void;
+  updateReferral: (id: string, updates: Partial<Referral>) => void;
   addReferral: (referral: Referral) => void;
-  updateComplianceItem: (id: string, updates: Partial<ComplianceItem>) => void;
-  getComplianceStatus: (item: ComplianceItem) => ComplianceCategory;
-  calculateDashboardKPIs: (referrals: Referral[], staff: StaffMember[], compliance: ComplianceItem[], quality: QualityItem[]) => DashboardKPIs;
-  findBestMatchStaff: (referral: Referral, staffList: StaffMember[]) => StaffScore[];
-  getSOCDaysUntilDeadline: (referral: Referral) => number | null;
-  setCurrentRole: (role: AppState['currentUser']['role']) => void;
+  // Visits
+  updateVisitChecklist: (visitId: string, taskIndex: number, completed: boolean) => void;
+  updateVisit: (visitId: string, updates: Partial<FieldVisit>) => void;
+  // Quality
+  updateQualityStatus: (id: string, status: QualityStatus) => void;
+  addQualityItem: (item: QualityItem) => void;
+  // Staff
+  updateStaff: (staffId: string, updates: Partial<StaffMember>) => void;
+  // Partners
+  addPartner: (partner: ReferralPartner) => void;
+  updatePartner: (id: string, updates: Partial<ReferralPartner>) => void;
+  // Audit
+  addAuditEntry: (entry: Omit<AuditEntry, 'id' | 'timestamp'>) => void;
+  // Alerts
+  addAlert: (alert: Omit<AlertItem, 'id'>) => void;
+  acknowledgeAlert: (alertId: string) => void;
+  // Assessments
+  updateOASIS: (id: string, updates: Partial<OASISAssessment>) => void;
+  updateHOPE: (id: string, updates: Partial<HOPEAssessment>) => void;
+  // Compliance
+  updateCompliance: (id: string, updates: Partial<ComplianceItem>) => void;
+  // Calculated compliance status
+  getCalculatedComplianceStatus: (item: ComplianceItem) => ReturnType<typeof getComplianceStatus>;
+  // Refresh
+  refreshTimestamp: () => void;
 }
 
-const AppContext = createContext<AppContextType | undefined>(undefined);
+const AppContext = createContext<AppContextValue | null>(null);
 
-// --- Provider ---
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AppState>(getInitialState);
+  const [state, dispatch] = useReducer(appReducer, getInitialState());
 
-  const updateReferralStage = useCallback((id: string, stage: Referral['stage']) => {
-    setState(prev => ({
-      ...prev,
-      referrals: prev.referrals.map(r => r.id === id ? { ...r, stage } : r),
-    }));
-  }, []);
+  const value: AppContextValue = {
+    state,
+    setCurrentRole: (role) => dispatch({ type: 'SET_ROLE', role }),
+    updateReferralStage: (id, stage) => dispatch({ type: 'UPDATE_REFERRAL_STAGE', id, stage }),
+    updateReferral: (id, updates) => dispatch({ type: 'UPDATE_REFERRAL', id, updates }),
+    addReferral: (referral) => dispatch({ type: 'ADD_REFERRAL', referral }),
+    updateVisitChecklist: (visitId, taskIndex, completed) =>
+      dispatch({ type: 'UPDATE_VISIT_CHECKLIST', visitId, taskIndex, completed }),
+    updateVisit: (visitId, updates) => dispatch({ type: 'UPDATE_VISIT', visitId, updates }),
+    updateQualityStatus: (id, status) => dispatch({ type: 'UPDATE_QUALITY_STATUS', id, status }),
+    addQualityItem: (item) => dispatch({ type: 'ADD_QUALITY_ITEM', item }),
+    updateStaff: (staffId, updates) => dispatch({ type: 'UPDATE_STAFF', staffId, updates }),
+    addPartner: (partner) => dispatch({ type: 'ADD_PARTNER', partner }),
+    updatePartner: (id, updates) => dispatch({ type: 'UPDATE_PARTNER', id, updates }),
+    addAuditEntry: (entry) => dispatch({ type: 'ADD_AUDIT_ENTRY', entry }),
+    addAlert: (alert) => dispatch({ type: 'ADD_ALERT', alert }),
+    acknowledgeAlert: (alertId) => dispatch({ type: 'ACKNOWLEDGE_ALERT', alertId }),
+    updateOASIS: (id, updates) => dispatch({ type: 'UPDATE_OASIS', id, updates }),
+    updateHOPE: (id, updates) => dispatch({ type: 'UPDATE_HOPE', id, updates }),
+    updateCompliance: (id, updates) => dispatch({ type: 'UPDATE_COMPLIANCE', id, updates }),
+    getCalculatedComplianceStatus: getComplianceStatus,
+    refreshTimestamp: () => dispatch({ type: 'REFRESH_TIMESTAMP' }),
+  };
 
-  const updateVisitChecklist = useCallback((visitId: string, taskIndex: number) => {
-    setState(prev => ({
-      ...prev,
-      visits: prev.visits.map(v => 
-        v.id === visitId 
-          ? { ...v, checklist: v.checklist.map((item, idx) => idx === taskIndex ? { ...item, completed: !item.completed } : item) }
-          : v
-      ),
-    }));
-  }, []);
-
-  const updateQualityStatus = useCallback((id: string, status: QualityItem['status']) => {
-    setState(prev => ({
-      ...prev,
-      quality: prev.quality.map(q => q.id === id ? { ...q, status } : q),
-    }));
-  }, []);
-
-  const addAuditEntry = useCallback((entry: Omit<AuditEntry, 'id' | 'timestamp'>) => {
-    const newEntry: AuditEntry = {
-      ...entry,
-      id: Date.now().toString(),
-      timestamp: new Date().toISOString(),
-    };
-    setState(prev => ({ ...prev, auditLog: [newEntry, ...prev.auditLog] }));
-  }, []);
-
-  const addReferral = useCallback((referral: Referral) => {
-    setState(prev => ({
-      ...prev,
-      referrals: [...prev.referrals, referral],
-    }));
-  }, []);
-
-  const updateVisitNotes = useCallback((visitId: string, notes: string) => {
-    setState(prev => ({
-      ...prev,
-      visits: prev.visits.map(v => v.id === visitId ? { ...v, notes } : v),
-    }));
-  }, []);
-
-  const addIncidentReport = useCallback((report: Omit<QualityItem, 'id'>) => {
-    const newReport: QualityItem = {
-      ...report,
-      id: `incident_${Date.now()}`,
-    };
-    setState(prev => ({
-      ...prev,
-      quality: [...prev.quality, newReport],
-    }));
-  }, []);
-
-  const updateComplianceItem = useCallback((id: string, updates: Partial<ComplianceItem>) => {
-    setState(prev => ({
-      ...prev,
-      compliance: prev.compliance.map(item => 
-        item.id === id ? { ...item, ...updates } : item
-      ),
-    }));
-  }, []);
-
-  const getComplianceStatus = useCallback((item: ComplianceItem) => {
-    return getNewComplianceStatus(item);
-  }, []);
-
-  const setCurrentRole = useCallback((role: AppState['currentUser']['role']) => {
-    setState(prev => ({
-      ...prev,
-      currentUser: {
-        ...prev.currentUser,
-        role: role,
-      },
-    }));
-  }, []);
-
-  return (
-    <AppContext.Provider value={{ state, updateReferralStage, updateVisitChecklist, updateVisitNotes, addIncidentReport, updateQualityStatus, addAuditEntry, addReferral, updateComplianceItem, getComplianceStatus, calculateDashboardKPIs, findBestMatchStaff, getSOCDaysUntilDeadline, setCurrentRole }}>
-      {children}
-    </AppContext.Provider>
-  );
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
-// --- Hook ---
-export function useAppState() {
-  const context = useContext(AppContext);
-  if (!context) throw new Error('useAppState must be used within AppProvider');
-  return context;
+// eslint-disable-next-line react-refresh/only-export-components
+export function useAppState(): AppContextValue {
+  const ctx = useContext(AppContext);
+  if (!ctx) throw new Error('useAppState must be used within AppProvider');
+  return ctx;
 }

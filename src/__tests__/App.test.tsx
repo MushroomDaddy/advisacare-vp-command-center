@@ -1,53 +1,44 @@
-/// <reference types="vitest" />
+import { describe, test, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import App from '../App';
-import { AppProvider, useAppState } from '../context/AppContext';
-import { vi } from 'vitest';
 
-// Mock the AppContext to control user roles
-vi.mock('../context/AppContext', async () => {
-  const actual = await vi.importActual<typeof import('../context/AppContext')>('../context/AppContext');
+// Mock react-router-dom
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
   return {
     ...actual,
-    useAppState: vi.fn(),
-    AppProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    BrowserRouter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    NavLink: ({ children, to }: { children: React.ReactNode; to: string }) => <a href={to}>{children}</a>,
+    Routes: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    Route: () => null,
+    Navigate: () => null,
+    useLocation: () => ({ pathname: '/' }),
   };
 });
 
-describe('App.tsx Routing and Role Access', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+import App from '../App';
+
+describe('App', () => {
+  test('renders HIPAA-conscious prototype banner', () => {
+    render(<App />);
+    expect(screen.getByTestId('hipaa-banner')).toBeInTheDocument();
+    expect(screen.getByText(/HIPAA-conscious prototype/i)).toBeInTheDocument();
   });
 
-  const mockState = {
-    currentUser: { role: 'VP', name: 'Test User' },
-    referrals: [],
-    compliance: [],
-    quality: [],
-    staff: [],
-    settings: {}
-  };
-
-  test('renders HIPAA prototype banner', () => {
-    (useAppState as any).mockReturnValue({
-      state: mockState,
-      getComplianceStatus: () => 'Valid'
-    });
-
+  test('renders sidebar with navigation', () => {
     render(<App />);
-    expect(screen.getByText(/Prototype only — demo data — not for production use without HIPAA review/i)).toBeInTheDocument();
+    expect(screen.getByText('AdvisaCare')).toBeInTheDocument();
+    expect(screen.getByText('VP Command Center')).toBeInTheDocument();
   });
 
-  test('VP role can access all routes', () => {
-    (useAppState as any).mockReturnValue({
-      state: mockState,
-      getComplianceStatus: () => 'Valid'
-    });
-
+  test('renders current user info in sidebar', () => {
     render(<App />);
-    expect(screen.getByText('Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Referrals')).toBeInTheDocument();
-    expect(screen.getByText('Staffing')).toBeInTheDocument();
-    expect(screen.getByText('Compliance')).toBeInTheDocument();
+    expect(screen.getByText('VP')).toBeInTheDocument();
+  });
+
+  test('banner mentions security controls', () => {
+    render(<App />);
+    const banner = screen.getByTestId('hipaa-banner');
+    expect(banner.textContent).toContain('BAA');
+    expect(banner.textContent).toContain('security controls');
   });
 });

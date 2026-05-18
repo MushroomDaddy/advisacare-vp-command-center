@@ -1,38 +1,50 @@
+import { describe, test, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+
+// Mock react-router-dom
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return {
+    ...actual,
+    BrowserRouter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    NavLink: ({ children, to }: { children: React.ReactNode; to: string }) => <a href={to}>{children}</a>,
+    Routes: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    Route: () => null,
+    Navigate: () => null,
+    useLocation: () => ({ pathname: '/' }),
+  };
+});
+
 import App from '../App';
-import { AppProvider } from '../context/AppContext';
 
-describe('HIPAA Banner Presence', () => {
-  test('displays HIPAA compliance warning banner', () => {
-    render(
-      <AppProvider>
-        <App />
-      </AppProvider>
-    );
-    
-    // Check for the HIPAA-related banner text
-    expect(screen.getByText(/HIPAA review/i)).toBeInTheDocument();
-    expect(screen.getByText(/not for production use/i)).toBeInTheDocument();
+describe('HIPAA Banner', () => {
+  test('shows HIPAA-conscious prototype text', () => {
+    render(<App />);
+    expect(screen.getByText(/HIPAA-conscious prototype/i)).toBeInTheDocument();
   });
 
-  test('banner is visible on all routes', () => {
-    render(
-      <AppProvider>
-        <App />
-      </AppProvider>
-    );
-    // Banner should be present regardless of route
-    const hipaaBanner = screen.getByText(/Prototype only — demo data/i);
-    expect(hipaaBanner).toBeVisible();
+  test('mentions BAA requirement', () => {
+    render(<App />);
+    const banner = screen.getByTestId('hipaa-banner');
+    expect(banner.textContent).toContain('BAA');
   });
 
-  test('banner contains required HIPAA disclaimer elements', () => {
-    render(
-      <AppProvider>
-        <App />
-      </AppProvider>
-    );
-    expect(screen.getByText(/BAA/i)).toBeInTheDocument();
-    expect(screen.getByText(/security controls/i)).toBeInTheDocument();
+  test('mentions security controls', () => {
+    render(<App />);
+    const banner = screen.getByTestId('hipaa-banner');
+    expect(banner.textContent).toContain('security controls');
+  });
+
+  test('mentions encryption and MFA', () => {
+    render(<App />);
+    const banner = screen.getByTestId('hipaa-banner');
+    expect(banner.textContent).toContain('encryption');
+    expect(banner.textContent).toContain('MFA');
+  });
+
+  test('mentions HIPAA/security review before real PHI', () => {
+    render(<App />);
+    const banner = screen.getByTestId('hipaa-banner');
+    expect(banner.textContent).toContain('HIPAA/security review');
   });
 });

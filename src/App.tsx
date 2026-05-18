@@ -1,209 +1,207 @@
-import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
-import { AppProvider, useAppState } from './context/AppContext';
-import { useState, useMemo } from 'react';
-import { allRoutes, canAccessRoute } from './lib/permissions';
+import { lazy, Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, NavLink, useLocation } from 'react-router-dom';
+import { useAppState, AppProvider } from './context/AppContext';
+import { canAccessRoute, getFirstAccessibleRoute, getVisibleRoutes } from './lib/permissions';
 import {
-  LayoutDashboard, ClipboardList, Users, ShieldCheck, Smartphone,
-  Star, Handshake, Settings, FileSearch, Bell, AlertTriangle,
-  ChevronRight, Shield,
+  LayoutDashboard, ClipboardList, Users, ShieldCheck, Smartphone, Star,
+  Handshake, Settings as SettingsIcon, FileSearch, Lock, Bell, AlertTriangle
 } from 'lucide-react';
-import Dashboard from './pages/Dashboard';
-import Referrals from './pages/Referrals';
-import Staffing from './pages/Staffing';
-import Compliance from './pages/Compliance';
-import FieldAssistant from './pages/FieldAssistant';
-import Quality from './pages/Quality';
-import ReferralPartners from './pages/ReferralPartners';
-import SettingsPage from './pages/Settings';
-import AuditLog from './pages/AuditLog';
-import './index.css';
+import type { UserRole } from './types';
 
-const routeComponents: Record<string, React.ComponentType> = {
-  '/': Dashboard,
-  '/referrals': Referrals,
-  '/staffing': Staffing,
-  '/compliance': Compliance,
-  '/field-assistant': FieldAssistant,
-  '/quality': Quality,
-  '/referral-partners': ReferralPartners,
-  '/settings': SettingsPage,
-  '/audit-log': AuditLog,
+// --- Lazy load pages ---
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Referrals = lazy(() => import('./pages/Referrals'));
+const Staffing = lazy(() => import('./pages/Staffing'));
+const Compliance = lazy(() => import('./pages/Compliance'));
+const FieldAssistant = lazy(() => import('./pages/FieldAssistant'));
+const Quality = lazy(() => import('./pages/Quality'));
+const ReferralPartners = lazy(() => import('./pages/ReferralPartners'));
+const SettingsPage = lazy(() => import('./pages/Settings'));
+const AuditLog = lazy(() => import('./pages/AuditLog'));
+const SecurityChecklist = lazy(() => import('./pages/SecurityChecklist'));
+
+const iconMap: Record<string, React.ReactNode> = {
+  LayoutDashboard: <LayoutDashboard size={17} />,
+  ClipboardList: <ClipboardList size={17} />,
+  Users: <Users size={17} />,
+  ShieldCheck: <ShieldCheck size={17} />,
+  Smartphone: <Smartphone size={17} />,
+  Star: <Star size={17} />,
+  Handshake: <Handshake size={17} />,
+  Settings: <SettingsIcon size={17} />,
+  FileSearch: <FileSearch size={17} />,
+  Lock: <Lock size={17} />,
 };
 
-const iconMap: Record<string, React.ComponentType<{ className?: string; size?: number }>> = {
-  LayoutDashboard, ClipboardList, Users, ShieldCheck, Smartphone,
-  Star, Handshake, Settings, FileSearch,
-};
+function LoadingSpinner() {
+  return (
+    <div className="flex items-center justify-center py-24" role="status" aria-label="Loading">
+      <div className="animate-spin h-8 w-8 border-3 border-advisa-accent border-t-transparent rounded-full" />
+    </div>
+  );
+}
 
-function AppContent() {
-  const { state, getComplianceStatus } = useAppState();
-  const [showNotifications, setShowNotifications] = useState(false);
-  
-  const notifications = useMemo(() => {
-    const items: { text: string; type: string }[] = [];
-    
-    state.referrals.filter(r => r.urgency === 'Immediate').forEach(r => {
-      items.push({ text: `Urgent referral: ${r.patientInitials} (${r.serviceType})`, type: 'urgent' });
-    });
-    
-    state.compliance.filter(c => getComplianceStatus(c) === 'Expired').forEach(c => {
-      items.push({ text: `Expired: ${c.staffName} - ${c.itemType}`, type: 'urgent' });
-    });
-    
-    state.quality.filter(q => q.status === 'Open' && q.priority === 'High').forEach(q => {
-      items.push({ text: `Open QA: ${q.type} for ${q.patientInitials}`, type: 'warning' });
-    });
-    
-    return items;
-  }, [state, getComplianceStatus]);
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="text-center py-16 text-slate-400 text-sm">
+      <p>{message}</p>
+    </div>
+  );
+}
 
-  const canAccess = (path: string) => canAccessRoute(path, state.currentUser.role);
+// --- Guard Route ---
+function GuardedRoute({ path, children }: { path: string; children: React.ReactNode }) {
+  const { state } = useAppState();
+  if (!canAccessRoute(path, state.currentUser.role)) {
+    return <Navigate to={getFirstAccessibleRoute(state.currentUser.role)} replace />;
+  }
+  return <>{children}</>;
+}
 
-  const ProtectedRoute = ({ element, path }: { element: React.ReactNode, path: string }) => {
-    if (!canAccess(path)) {
-      return <Navigate to="/" replace />;
-    }
-    return <>{element}</>;
-  };
+// --- HIPAA Banner ---
+function HIPAABanner() {
+  return (
+    <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs text-amber-800 flex items-center gap-2" data-testid="hipaa-banner">
+      <AlertTriangle size={13} className="flex-shrink-0" />
+      <span>
+        <strong>HIPAA-conscious prototype</strong> — Prototype only — demo data — not for production use.
+        A BAA, encryption at rest, MFA, server-side RBAC, immutable audit logging, automatic logoff, secure backups,
+        disaster recovery, and a full HIPAA/security review with security controls are required before handling real PHI.
+      </span>
+    </div>
+  );
+}
 
-  const visibleRoutes = allRoutes.filter(r => canAccess(r.path));
+// --- Alert Badge ---
+function AlertBadge() {
+  const { state } = useAppState();
+  const unacknowledged = state.alerts.filter(a => !a.acknowledged).length;
+  if (unacknowledged === 0) return null;
+  return (
+    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] rounded-full flex items-center justify-center font-bold">
+      {unacknowledged}
+    </span>
+  );
+}
+
+// --- Sidebar ---
+function Sidebar() {
+  const { state } = useAppState();
+  const routes = getVisibleRoutes(state.currentUser.role);
+
+  return (
+    <aside className="w-56 bg-white border-r border-advisa-border flex flex-col h-full" aria-label="Main navigation">
+      <div className="p-4 border-b border-advisa-border">
+        <h1 className="text-base font-bold text-advisa-primary tracking-tight">AdvisaCare</h1>
+        <p className="text-[10px] text-slate-400 mt-0.5">VP Command Center</p>
+      </div>
+      <nav className="flex-1 py-2 overflow-y-auto">
+        {routes.map(route => (
+          <NavLink
+            key={route.path}
+            to={route.path}
+            className={({ isActive }) =>
+              `flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium transition-all ${isActive
+                ? 'text-advisa-accent bg-sky-50 border-r-2 border-advisa-accent'
+                : 'text-slate-600 hover:text-slate-800 hover:bg-slate-50'
+              }`
+            }
+          >
+            {iconMap[route.icon]}
+            {route.label}
+          </NavLink>
+        ))}
+      </nav>
+      <div className="p-3 border-t border-advisa-border bg-slate-50/50">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 bg-advisa-accent rounded-full flex items-center justify-center text-white text-xs font-bold">
+            {state.currentUser.name.charAt(0)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-slate-700 truncate">{state.currentUser.name}</p>
+            <p className="text-[10px] text-slate-400">{state.currentUser.role}</p>
+          </div>
+          <div className="relative">
+            <Bell size={14} className="text-slate-400" />
+            <AlertBadge />
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+// --- Last Refreshed ---
+function LastRefreshed() {
+  const { state, refreshTimestamp } = useAppState();
+  return (
+    <div className="flex items-center gap-2 text-[10px] text-slate-400">
+      <span>Last refreshed: {new Date(state.lastRefreshed).toLocaleTimeString()}</span>
+      <button onClick={refreshTimestamp} className="hover:text-advisa-accent transition-colors underline">
+        Refresh
+      </button>
+    </div>
+  );
+}
+
+// --- Page header ---
+function PageHeader() {
+  const location = useLocation();
+  const { state } = useAppState();
+  const routes = getVisibleRoutes(state.currentUser.role);
+  const current = routes.find(r => r.path === location.pathname);
+  return (
+    <header className="bg-white border-b border-advisa-border px-6 py-3 flex items-center justify-between">
+      <p className="text-sm font-semibold text-slate-700">{current?.label || 'AdvisaCare'}</p>
+      <LastRefreshed />
+    </header>
+  );
+}
+
+// --- Main App Shell ---
+function AppShell() {
+  const { state } = useAppState();
+  const firstRoute = getFirstAccessibleRoute(state.currentUser.role);
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-advisa-surface flex">
-        {/* Professional Sidebar */}
-        <aside className="w-[260px] bg-gradient-to-b from-advisa-primary to-advisa-secondary text-white hidden md:flex md:flex-col shadow-sidebar">
-          {/* Logo / Brand */}
-          <div className="px-6 py-5 border-b border-white/10">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-advisa-accent rounded-lg flex items-center justify-center shadow-md">
-                <Shield size={20} className="text-white" />
-              </div>
-              <div>
-                <h1 className="text-base font-bold tracking-tight leading-tight">AdvisaCare</h1>
-                <p className="text-[10px] font-medium text-sky-300 uppercase tracking-widest">VP Command Center</p>
-              </div>
-            </div>
+      <div className="flex flex-col h-screen">
+        <HIPAABanner />
+        <div className="flex flex-1 overflow-hidden">
+          <Sidebar />
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <PageHeader />
+            <main className="flex-1 overflow-y-auto p-6 bg-slate-50">
+              <Suspense fallback={<LoadingSpinner />}>
+                <Routes>
+                  <Route path="/" element={<GuardedRoute path="/"><Dashboard /></GuardedRoute>} />
+                  <Route path="/referrals" element={<GuardedRoute path="/referrals"><Referrals /></GuardedRoute>} />
+                  <Route path="/staffing" element={<GuardedRoute path="/staffing"><Staffing /></GuardedRoute>} />
+                  <Route path="/compliance" element={<GuardedRoute path="/compliance"><Compliance /></GuardedRoute>} />
+                  <Route path="/field-assistant" element={<GuardedRoute path="/field-assistant"><FieldAssistant /></GuardedRoute>} />
+                  <Route path="/quality" element={<GuardedRoute path="/quality"><Quality /></GuardedRoute>} />
+                  <Route path="/referral-partners" element={<GuardedRoute path="/referral-partners"><ReferralPartners /></GuardedRoute>} />
+                  <Route path="/settings" element={<GuardedRoute path="/settings"><SettingsPage /></GuardedRoute>} />
+                  <Route path="/audit-log" element={<GuardedRoute path="/audit-log"><AuditLog /></GuardedRoute>} />
+                  <Route path="/security-checklist" element={<GuardedRoute path="/security-checklist"><SecurityChecklist /></GuardedRoute>} />
+                  <Route path="*" element={<Navigate to={firstRoute} replace />} />
+                </Routes>
+              </Suspense>
+            </main>
           </div>
-
-          {/* User Info */}
-          <div className="px-6 py-4 border-b border-white/10">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center text-xs font-semibold">
-                {state.currentUser.name.split(' ').map(n => n[0]).join('')}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{state.currentUser.name}</p>
-                <p className="text-[11px] text-sky-300 font-medium">{state.currentUser.role}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-            <p className="px-3 pb-2 text-[10px] font-semibold text-sky-300/60 uppercase tracking-widest">Navigation</p>
-            {visibleRoutes.map((link) => {
-              const Icon = iconMap[link.icon];
-              return (
-                <NavLink
-                  key={link.path}
-                  to={link.path}
-                  end={link.path === '/'}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 group ${
-                      isActive
-                        ? 'bg-advisa-accent text-white shadow-md shadow-advisa-accent/25'
-                        : 'text-slate-300 hover:bg-white/8 hover:text-white'
-                    }`
-                  }
-                >
-                  {Icon && <Icon size={17} className="flex-shrink-0" />}
-                  <span className="flex-1">{link.label}</span>
-                  <ChevronRight size={14} className="opacity-0 group-hover:opacity-50 transition-opacity" />
-                </NavLink>
-              );
-            })}
-          </nav>
-
-          {/* HIPAA Footer */}
-          <div className="px-4 py-3 border-t border-white/10">
-            <div className="flex items-center gap-2 text-[10px] text-slate-400">
-              <ShieldCheck size={12} />
-              <span>HIPAA-Conscious Prototype</span>
-            </div>
-          </div>
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto">
-          {/* Top Bar */}
-          <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-advisa-border px-8 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
-              <AlertTriangle size={14} />
-              <span className="font-medium">Prototype — demo data only — not for production use</span>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="relative p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                <Bell size={18} className="text-slate-500" />
-                {notifications.length > 0 && (
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-                )}
-              </button>
-            </div>
-          </header>
-
-          {/* Notification Panel */}
-          {showNotifications && notifications.length > 0 && (
-            <div className="mx-8 mt-4">
-              <div className="card max-w-md ml-auto">
-                <div className="card-header">
-                  <Bell size={15} />
-                  <span>Alerts ({notifications.length})</span>
-                </div>
-                <ul className="space-y-2">
-                  {notifications.map((n, i) => (
-                    <li key={i} className={`text-xs p-2.5 rounded-lg flex items-start gap-2 ${n.type === 'urgent' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
-                      <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
-                      {n.text}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          )}
-
-          {/* Page Content */}
-          <div className="p-8">
-            <Routes>
-              {allRoutes.map((route) => {
-                const Component = routeComponents[route.path];
-                if (!Component) return null;
-                return (
-                  <Route
-                    key={route.path}
-                    path={route.path}
-                    element={<ProtectedRoute path={route.path} element={<Component />} />}
-                  />
-                );
-              })}
-            </Routes>
-          </div>
-        </main>
+        </div>
       </div>
     </BrowserRouter>
   );
 }
 
-function App() {
+export default function App() {
   return (
     <AppProvider>
-      <AppContent />
+      <AppShell />
     </AppProvider>
   );
 }
 
-export default App;
+export { EmptyState, LoadingSpinner };
+export type { UserRole };
