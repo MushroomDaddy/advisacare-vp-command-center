@@ -1,47 +1,24 @@
 // ==============================
-// App Context — State Management + Toast System
+// AdvisaCare VP Command Center — AppContext (Phase 3)
 // ==============================
 
-import { createContext, useContext, useReducer, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useReducer, type ReactNode, useCallback, useEffect } from 'react';
 import type {
-  AppState, UserRole, Referral, StaffMember, QualityItem, QualityStatus,
-  AuditEntry, AlertItem, ReferralPartner, FieldVisit, OASISAssessment,
-  HOPEAssessment, ToastItem, ShiftBoardEntry, OfflineSyncItem
+  AppState, CurrentUser, Referral, ReferralStage, StaffMember,
+  FieldVisit, QualityItem, OASISAssessment, ReferralPartner,
+  AuditEntry, AlertItem, ShiftBoardEntry, OfflineSyncItem,
+  ToastItem, CatastrophicCase,
 } from '../types';
-import { roleNameMap } from '../types';
 import {
-  seedReferrals, seedStaff, seedCompliance, seedVisits, seedQuality,
-  seedOASIS, seedHOPE, seedPartners, seedAlerts, seedAuditLog,
-  seedShiftBoard, seedOfflineSync
+  seedReferrals, seedStaff, seedCompliance, seedVisits,
+  seedQuality, seedOASIS, seedHOPE, seedPartners, seedAuditLog,
+  seedAlerts, seedShiftBoard, seedOfflineSyncQueue, seedCatastrophicCases,
 } from '../data/seedData';
+import { generateDerivedAlerts, reconcileAlerts } from '../utils/alertEngine';
 
-// --- Actions ---
-type Action =
-  | { type: 'SET_ROLE'; role: UserRole }
-  | { type: 'UPDATE_REFERRAL_STAGE'; id: string; stage: Referral['stage'] }
-  | { type: 'UPDATE_REFERRAL'; id: string; updates: Partial<Referral> }
-  | { type: 'UPDATE_STAFF'; id: string; updates: Partial<StaffMember> }
-  | { type: 'UPDATE_QUALITY_STATUS'; id: string; status: QualityStatus }
-  | { type: 'ADD_QUALITY_ITEM'; item: QualityItem }
-  | { type: 'ADD_AUDIT_ENTRY'; entry: Omit<AuditEntry, 'id' | 'timestamp'> }
-  | { type: 'ADD_ALERT'; alert: Omit<AlertItem, 'id'> }
-  | { type: 'ACKNOWLEDGE_ALERT'; id: string; user: string }
-  | { type: 'ADD_PARTNER'; partner: ReferralPartner }
-  | { type: 'UPDATE_PARTNER'; id: string; updates: Partial<ReferralPartner> }
-  | { type: 'UPDATE_VISIT'; id: string; updates: Partial<FieldVisit> }
-  | { type: 'UPDATE_VISIT_CHECKLIST'; visitId: string; taskIndex: number; completed: boolean }
-  | { type: 'UPDATE_OASIS'; id: string; updates: Partial<OASISAssessment> }
-  | { type: 'UPDATE_HOPE'; id: string; updates: Partial<HOPEAssessment> }
-  | { type: 'ADD_VISIT'; visit: FieldVisit }
-  | { type: 'UPDATE_SHIFT_BOARD'; id: string; updates: Partial<ShiftBoardEntry> }
-  | { type: 'UPDATE_OFFLINE_SYNC'; id: string; updates: Partial<OfflineSyncItem> }
-  | { type: 'ADD_TOAST'; toast: ToastItem }
-  | { type: 'REMOVE_TOAST'; id: string }
-  | { type: 'REFRESH_TIMESTAMP' };
-
-// --- Initial State ---
+// ==================== Initial State ====================
 const initialState: AppState = {
-  currentUser: { name: roleNameMap['VP'], role: 'VP' },
+  currentUser: { name: 'VP User', role: 'VP' },
   referrals: seedReferrals,
   staff: seedStaff,
   compliance: seedCompliance,
@@ -53,120 +30,143 @@ const initialState: AppState = {
   auditLog: seedAuditLog,
   alerts: seedAlerts,
   shiftBoard: seedShiftBoard,
-  offlineSyncQueue: seedOfflineSync,
+  offlineSyncQueue: seedOfflineSyncQueue,
+  catastrophicCases: seedCatastrophicCases,
   toasts: [],
   lastRefreshed: new Date().toISOString(),
 };
 
-// --- Reducer ---
-function appReducer(state: AppState, action: Action): AppState {
+// ==================== Actions ====================
+type Action =
+  | { type: 'SET_USER'; payload: CurrentUser }
+  | { type: 'UPDATE_REFERRAL'; payload: { id: string; updates: Partial<Referral> } }
+  | { type: 'UPDATE_REFERRAL_STAGE'; payload: { id: string; stage: ReferralStage } }
+  | { type: 'UPDATE_STAFF'; payload: { id: string; updates: Partial<StaffMember> } }
+  | { type: 'UPDATE_VISIT'; payload: { id: string; updates: Partial<FieldVisit> } }
+  | { type: 'ADD_VISIT'; payload: FieldVisit }
+  | { type: 'UPDATE_VISIT_CHECKLIST'; payload: { visitId: string; taskIndex: number; completed: boolean } }
+  | { type: 'UPDATE_QUALITY'; payload: { id: string; updates: Partial<QualityItem> } }
+  | { type: 'UPDATE_OASIS'; payload: { id: string; updates: Partial<OASISAssessment> } }
+  | { type: 'UPDATE_PARTNER'; payload: { id: string; updates: Partial<ReferralPartner> } }
+  | { type: 'ADD_AUDIT_ENTRY'; payload: Omit<AuditEntry, 'id' | 'timestamp'> }
+  | { type: 'ADD_TOAST'; payload: ToastItem }
+  | { type: 'REMOVE_TOAST'; payload: string }
+  | { type: 'ACKNOWLEDGE_ALERT'; payload: { id: string; user: string } }
+  | { type: 'RECONCILE_ALERTS'; payload: AlertItem[] }
+  | { type: 'UPDATE_SHIFT_BOARD'; payload: { id: string; updates: Partial<ShiftBoardEntry> } }
+  | { type: 'UPDATE_OFFLINE_SYNC'; payload: { id: string; updates: Partial<OfflineSyncItem> } }
+  | { type: 'UPDATE_CATASTROPHIC_CASE'; payload: { id: string; updates: Partial<CatastrophicCase> } }
+  | { type: 'UPDATE_HOPE'; payload: { id: string; updates: Partial<import('../types').HOPEAssessment> } };
+
+function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
-    case 'SET_ROLE':
+    case 'SET_USER':
+      return { ...state, currentUser: action.payload };
+
+    case 'UPDATE_REFERRAL':
       return {
         ...state,
-        currentUser: { name: roleNameMap[action.role], role: action.role },
+        referrals: state.referrals.map(r => r.id === action.payload.id ? { ...r, ...action.payload.updates } : r),
       };
 
     case 'UPDATE_REFERRAL_STAGE':
       return {
         ...state,
         referrals: state.referrals.map(r =>
-          r.id === action.id ? { ...r, stage: action.stage } : r
-        ),
-      };
-
-    case 'UPDATE_REFERRAL':
-      return {
-        ...state,
-        referrals: state.referrals.map(r =>
-          r.id === action.id ? { ...r, ...action.updates } : r
+          r.id === action.payload.id ? { ...r, stage: action.payload.stage } : r
         ),
       };
 
     case 'UPDATE_STAFF':
       return {
         ...state,
-        staff: state.staff.map(s =>
-          s.id === action.id ? { ...s, ...action.updates } : s
-        ),
-      };
-
-    case 'UPDATE_QUALITY_STATUS':
-      return {
-        ...state,
-        quality: state.quality.map(q =>
-          q.id === action.id ? { ...q, status: action.status } : q
-        ),
-      };
-
-    case 'ADD_QUALITY_ITEM':
-      return { ...state, quality: [action.item, ...state.quality] };
-
-    case 'ADD_AUDIT_ENTRY':
-      return {
-        ...state,
-        auditLog: [
-          { ...action.entry, id: 'audit' + Date.now() + Math.random().toString(36).slice(2, 6), timestamp: new Date().toISOString() },
-          ...state.auditLog,
-        ],
-      };
-
-    case 'ADD_ALERT':
-      return {
-        ...state,
-        alerts: [
-          { ...action.alert, id: 'al' + Date.now() + Math.random().toString(36).slice(2, 6) },
-          ...state.alerts,
-        ],
-      };
-
-    case 'ACKNOWLEDGE_ALERT':
-      return {
-        ...state,
-        alerts: state.alerts.map(a =>
-          a.id === action.id ? { ...a, acknowledged: true, acknowledgedBy: action.user, acknowledgedAt: new Date().toISOString() } : a
-        ),
-      };
-
-    case 'ADD_PARTNER':
-      return { ...state, partners: [...state.partners, action.partner] };
-
-    case 'UPDATE_PARTNER':
-      return {
-        ...state,
-        partners: state.partners.map(p =>
-          p.id === action.id ? { ...p, ...action.updates } : p
-        ),
+        staff: state.staff.map(s => s.id === action.payload.id ? { ...s, ...action.payload.updates } : s),
       };
 
     case 'UPDATE_VISIT':
       return {
         ...state,
-        visits: state.visits.map(v =>
-          v.id === action.id ? { ...v, ...action.updates } : v
-        ),
+        visits: state.visits.map(v => v.id === action.payload.id ? { ...v, ...action.payload.updates } : v),
       };
+
+    case 'ADD_VISIT':
+      return { ...state, visits: [...state.visits, action.payload] };
 
     case 'UPDATE_VISIT_CHECKLIST':
       return {
         ...state,
-        visits: state.visits.map(v =>
-          v.id === action.visitId
-            ? {
-                ...v,
-                checklist: v.checklist.map((task, i) =>
-                  i === action.taskIndex ? { ...task, completed: action.completed } : task
-                ),
-              }
-            : v
-        ),
+        visits: state.visits.map(v => {
+          if (v.id !== action.payload.visitId) return v;
+          const newChecklist = v.checklist.map((item, idx) =>
+            idx === action.payload.taskIndex ? { ...item, completed: action.payload.completed } : item
+          );
+          return { ...v, checklist: newChecklist };
+        }),
+      };
+
+    case 'UPDATE_QUALITY':
+      return {
+        ...state,
+        quality: state.quality.map(q => q.id === action.payload.id ? { ...q, ...action.payload.updates } : q),
       };
 
     case 'UPDATE_OASIS':
       return {
         ...state,
-        oasisAssessments: state.oasisAssessments.map(o =>
-          o.id === action.id ? { ...o, ...action.updates } : o
+        oasisAssessments: state.oasisAssessments.map(o => o.id === action.payload.id ? { ...o, ...action.payload.updates } : o),
+      };
+
+    case 'UPDATE_PARTNER':
+      return {
+        ...state,
+        partners: state.partners.map(p => p.id === action.payload.id ? { ...p, ...action.payload.updates } : p),
+      };
+
+    case 'ADD_AUDIT_ENTRY': {
+      const entry: AuditEntry = {
+        id: 'AUD-' + Date.now().toString(36),
+        timestamp: new Date().toISOString(),
+        ...action.payload,
+      };
+      return { ...state, auditLog: [entry, ...state.auditLog] };
+    }
+
+    case 'ADD_TOAST':
+      return { ...state, toasts: [...state.toasts, action.payload] };
+
+    case 'REMOVE_TOAST':
+      return { ...state, toasts: state.toasts.filter(t => t.id !== action.payload) };
+
+    case 'ACKNOWLEDGE_ALERT':
+      return {
+        ...state,
+        alerts: state.alerts.map(a =>
+          a.id === action.payload.id ? { ...a, acknowledged: true, acknowledgedBy: action.payload.user, acknowledgedAt: new Date().toISOString() } : a
+        ),
+      };
+
+    case 'RECONCILE_ALERTS':
+      return { ...state, alerts: action.payload };
+
+    case 'UPDATE_SHIFT_BOARD':
+      return {
+        ...state,
+        shiftBoard: state.shiftBoard.map(s => s.id === action.payload.id ? { ...s, ...action.payload.updates } : s),
+      };
+
+    case 'UPDATE_OFFLINE_SYNC':
+      return {
+        ...state,
+        offlineSyncQueue: state.offlineSyncQueue.map(i =>
+          i.id === action.payload.id ? { ...i, ...action.payload.updates } : i
+        ),
+      };
+
+    case 'UPDATE_CATASTROPHIC_CASE':
+      return {
+        ...state,
+        catastrophicCases: state.catastrophicCases.map(c =>
+          c.id === action.payload.id ? { ...c, ...action.payload.updates } : c
         ),
       };
 
@@ -174,106 +174,86 @@ function appReducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         hopeAssessments: state.hopeAssessments.map(h =>
-          h.id === action.id ? { ...h, ...action.updates } : h
+          h.id === action.payload.id ? { ...h, ...action.payload.updates } : h
         ),
       };
-
-    case 'ADD_VISIT':
-      return { ...state, visits: [...state.visits, action.visit] };
-
-    case 'UPDATE_SHIFT_BOARD':
-      return {
-        ...state,
-        shiftBoard: state.shiftBoard.map(s =>
-          s.id === action.id ? { ...s, ...action.updates } : s
-        ),
-      };
-
-    case 'UPDATE_OFFLINE_SYNC':
-      return {
-        ...state,
-        offlineSyncQueue: state.offlineSyncQueue.map(item =>
-          item.id === action.id ? { ...item, ...action.updates } : item
-        ),
-      };
-
-    case 'ADD_TOAST':
-      return { ...state, toasts: [...state.toasts, action.toast] };
-
-    case 'REMOVE_TOAST':
-      return { ...state, toasts: state.toasts.filter(t => t.id !== action.id) };
-
-    case 'REFRESH_TIMESTAMP':
-      return { ...state, lastRefreshed: new Date().toISOString() };
 
     default:
       return state;
   }
 }
 
-// --- Context ---
-interface AppContextValue {
+// ==================== Context Interface ====================
+interface AppContextType {
   state: AppState;
-  setCurrentRole: (role: UserRole) => void;
-  updateReferralStage: (id: string, stage: Referral['stage']) => void;
+  setUser: (user: CurrentUser) => void;
   updateReferral: (id: string, updates: Partial<Referral>) => void;
+  updateReferralStage: (id: string, stage: ReferralStage) => void;
   updateStaff: (id: string, updates: Partial<StaffMember>) => void;
-  updateQualityStatus: (id: string, status: QualityStatus) => void;
-  addQualityItem: (item: QualityItem) => void;
-  addAuditEntry: (entry: Omit<AuditEntry, 'id' | 'timestamp'>) => void;
-  addAlert: (alert: Omit<AlertItem, 'id'>) => void;
-  acknowledgeAlert: (id: string) => void;
-  addPartner: (partner: ReferralPartner) => void;
-  updatePartner: (id: string, updates: Partial<ReferralPartner>) => void;
   updateVisit: (id: string, updates: Partial<FieldVisit>) => void;
-  updateVisitChecklist: (visitId: string, taskIndex: number, completed: boolean) => void;
-  updateOASIS: (id: string, updates: Partial<OASISAssessment>) => void;
-  updateHOPE: (id: string, updates: Partial<HOPEAssessment>) => void;
   addVisit: (visit: FieldVisit) => void;
+  updateVisitChecklist: (visitId: string, taskIndex: number, completed: boolean) => void;
+  updateQuality: (id: string, updates: Partial<QualityItem>) => void;
+  updateOASIS: (id: string, updates: Partial<OASISAssessment>) => void;
+  updatePartner: (id: string, updates: Partial<ReferralPartner>) => void;
+  addAuditEntry: (entry: Omit<AuditEntry, 'id' | 'timestamp'>) => void;
+  addToast: (message: string, type: ToastItem['type']) => void;
+  removeToast: (id: string) => void;
+  acknowledgeAlert: (id: string) => void;
   updateShiftBoard: (id: string, updates: Partial<ShiftBoardEntry>) => void;
   updateOfflineSync: (id: string, updates: Partial<OfflineSyncItem>) => void;
-  addToast: (message: string, type?: ToastItem['type']) => void;
-  removeToast: (id: string) => void;
-  refreshTimestamp: () => void;
+  updateCatastrophicCase: (id: string, updates: Partial<CatastrophicCase>) => void;
+  updateHOPE: (id: string, updates: Partial<import('../types').HOPEAssessment>) => void;
 }
 
-const AppContext = createContext<AppContextValue | null>(null);
+const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(appReducer, initialState);
+  const [state, dispatch] = useReducer(reducer, initialState);
 
-  const setCurrentRole = useCallback((role: UserRole) => dispatch({ type: 'SET_ROLE', role }), []);
-  const updateReferralStage = useCallback((id: string, stage: Referral['stage']) => dispatch({ type: 'UPDATE_REFERRAL_STAGE', id, stage }), []);
-  const updateReferral = useCallback((id: string, updates: Partial<Referral>) => dispatch({ type: 'UPDATE_REFERRAL', id, updates }), []);
-  const updateStaff = useCallback((id: string, updates: Partial<StaffMember>) => dispatch({ type: 'UPDATE_STAFF', id, updates }), []);
-  const updateQualityStatus = useCallback((id: string, status: QualityStatus) => dispatch({ type: 'UPDATE_QUALITY_STATUS', id, status }), []);
-  const addQualityItem = useCallback((item: QualityItem) => dispatch({ type: 'ADD_QUALITY_ITEM', item }), []);
-  const addAuditEntry = useCallback((entry: Omit<AuditEntry, 'id' | 'timestamp'>) => dispatch({ type: 'ADD_AUDIT_ENTRY', entry }), []);
-  const addAlert = useCallback((alert: Omit<AlertItem, 'id'>) => dispatch({ type: 'ADD_ALERT', alert }), []);
-  const acknowledgeAlert = useCallback((id: string) => dispatch({ type: 'ACKNOWLEDGE_ALERT', id, user: state.currentUser.name }), [state.currentUser.name]);
-  const addPartner = useCallback((partner: ReferralPartner) => dispatch({ type: 'ADD_PARTNER', partner }), []);
-  const updatePartner = useCallback((id: string, updates: Partial<ReferralPartner>) => dispatch({ type: 'UPDATE_PARTNER', id, updates }), []);
-  const updateVisit = useCallback((id: string, updates: Partial<FieldVisit>) => dispatch({ type: 'UPDATE_VISIT', id, updates }), []);
-  const updateVisitChecklist = useCallback((visitId: string, taskIndex: number, completed: boolean) => dispatch({ type: 'UPDATE_VISIT_CHECKLIST', visitId, taskIndex, completed }), []);
-  const updateOASIS = useCallback((id: string, updates: Partial<OASISAssessment>) => dispatch({ type: 'UPDATE_OASIS', id, updates }), []);
-  const updateHOPE = useCallback((id: string, updates: Partial<HOPEAssessment>) => dispatch({ type: 'UPDATE_HOPE', id, updates }), []);
-  const addVisit = useCallback((visit: FieldVisit) => dispatch({ type: 'ADD_VISIT', visit }), []);
-  const updateShiftBoard = useCallback((id: string, updates: Partial<ShiftBoardEntry>) => dispatch({ type: 'UPDATE_SHIFT_BOARD', id, updates }), []);
-  const updateOfflineSync = useCallback((id: string, updates: Partial<OfflineSyncItem>) => dispatch({ type: 'UPDATE_OFFLINE_SYNC', id, updates }), []);
-  const addToast = useCallback((message: string, type: ToastItem['type'] = 'info') => {
-    const id = 'toast' + Date.now() + Math.random().toString(36).slice(2, 6);
-    dispatch({ type: 'ADD_TOAST', toast: { id, message, type } });
-    setTimeout(() => dispatch({ type: 'REMOVE_TOAST', id }), 4000);
+  // Run alert engine on state changes
+  useEffect(() => {
+    const derived = generateDerivedAlerts(state);
+    const reconciled = reconcileAlerts(state.alerts, derived);
+    // Only dispatch if alerts actually changed to avoid infinite loop
+    const changed = reconciled.length !== state.alerts.length ||
+      reconciled.some((a, i) => a.id !== state.alerts[i]?.id || a.resolved !== state.alerts[i]?.resolved);
+    if (changed) {
+      dispatch({ type: 'RECONCILE_ALERTS', payload: reconciled });
+    }
+  }, [state.referrals, state.compliance, state.quality, state.visits, state.oasisAssessments, state.hopeAssessments, state.partners]);
+
+  const setUser = useCallback((user: CurrentUser) => dispatch({ type: 'SET_USER', payload: user }), []);
+  const updateReferral = useCallback((id: string, updates: Partial<Referral>) => dispatch({ type: 'UPDATE_REFERRAL', payload: { id, updates } }), []);
+  const updateReferralStage = useCallback((id: string, stage: ReferralStage) => dispatch({ type: 'UPDATE_REFERRAL_STAGE', payload: { id, stage } }), []);
+  const updateStaff = useCallback((id: string, updates: Partial<StaffMember>) => dispatch({ type: 'UPDATE_STAFF', payload: { id, updates } }), []);
+  const updateVisit = useCallback((id: string, updates: Partial<FieldVisit>) => dispatch({ type: 'UPDATE_VISIT', payload: { id, updates } }), []);
+  const addVisit = useCallback((visit: FieldVisit) => dispatch({ type: 'ADD_VISIT', payload: visit }), []);
+  const updateVisitChecklist = useCallback((visitId: string, taskIndex: number, completed: boolean) => dispatch({ type: 'UPDATE_VISIT_CHECKLIST', payload: { visitId, taskIndex, completed } }), []);
+  const updateQuality = useCallback((id: string, updates: Partial<QualityItem>) => dispatch({ type: 'UPDATE_QUALITY', payload: { id, updates } }), []);
+  const updateOASIS = useCallback((id: string, updates: Partial<OASISAssessment>) => dispatch({ type: 'UPDATE_OASIS', payload: { id, updates } }), []);
+  const updatePartner = useCallback((id: string, updates: Partial<ReferralPartner>) => dispatch({ type: 'UPDATE_PARTNER', payload: { id, updates } }), []);
+  const addAuditEntry = useCallback((entry: Omit<AuditEntry, 'id' | 'timestamp'>) => dispatch({ type: 'ADD_AUDIT_ENTRY', payload: entry }), []);
+  const addToast = useCallback((message: string, type: ToastItem['type']) => {
+    const id = 'toast_' + Date.now();
+    dispatch({ type: 'ADD_TOAST', payload: { id, message, type } });
+    setTimeout(() => dispatch({ type: 'REMOVE_TOAST', payload: id }), 4000);
   }, []);
-  const removeToast = useCallback((id: string) => dispatch({ type: 'REMOVE_TOAST', id }), []);
-  const refreshTimestamp = useCallback(() => dispatch({ type: 'REFRESH_TIMESTAMP' }), []);
+  const removeToast = useCallback((id: string) => dispatch({ type: 'REMOVE_TOAST', payload: id }), []);
+  const acknowledgeAlert = useCallback((id: string) => {
+    dispatch({ type: 'ACKNOWLEDGE_ALERT', payload: { id, user: state.currentUser.name } });
+  }, [state.currentUser.name]);
+  const updateShiftBoard = useCallback((id: string, updates: Partial<ShiftBoardEntry>) => dispatch({ type: 'UPDATE_SHIFT_BOARD', payload: { id, updates } }), []);
+  const updateOfflineSync = useCallback((id: string, updates: Partial<OfflineSyncItem>) => dispatch({ type: 'UPDATE_OFFLINE_SYNC', payload: { id, updates } }), []);
+  const updateCatastrophicCase = useCallback((id: string, updates: Partial<CatastrophicCase>) => dispatch({ type: 'UPDATE_CATASTROPHIC_CASE', payload: { id, updates } }), []);
+  const updateHOPE = useCallback((id: string, updates: Partial<import('../types').HOPEAssessment>) => dispatch({ type: 'UPDATE_HOPE', payload: { id, updates } }), []);
 
   return (
     <AppContext.Provider value={{
-      state, setCurrentRole, updateReferralStage, updateReferral, updateStaff,
-      updateQualityStatus, addQualityItem, addAuditEntry, addAlert, acknowledgeAlert,
-      addPartner, updatePartner, updateVisit, updateVisitChecklist, updateOASIS, updateHOPE,
-      addVisit, updateShiftBoard, updateOfflineSync, addToast, removeToast, refreshTimestamp,
+      state, setUser, updateReferral, updateReferralStage, updateStaff,
+      updateVisit, addVisit, updateVisitChecklist, updateQuality, updateOASIS,
+      updatePartner, addAuditEntry, addToast, removeToast, acknowledgeAlert,
+      updateShiftBoard, updateOfflineSync, updateCatastrophicCase, updateHOPE,
     }}>
       {children}
     </AppContext.Provider>
@@ -282,7 +262,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function useAppState() {
-  const context = useContext(AppContext);
-  if (!context) throw new Error('useAppState must be used within AppProvider');
-  return context;
+  const ctx = useContext(AppContext);
+  if (!ctx) throw new Error('useAppState must be used within AppProvider');
+  return ctx;
 }

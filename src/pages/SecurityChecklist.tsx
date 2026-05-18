@@ -59,7 +59,7 @@ const checklist: ChecklistItem[] = [
     category: 'Incident Response',
     items: [
       { label: 'Security incident response plan', status: 'Required' },
-      { label: 'Breach notification procedures (≤72 hours)', status: 'Required' },
+      { label: 'Breach notification procedures aligned with HIPAA, applicable state law, contractual obligations, and company policy', status: 'Required' },
       { label: 'Sanctions policy for violations', status: 'Required' },
     ],
   },

@@ -44,6 +44,21 @@ export interface ReferralTimelineEvent {
   details?: string;
 }
 
+export interface StageTimestamps {
+  receivedAt?: string;
+  docsRequestedAt?: string;
+  docsCompleteAt?: string;
+  eligibilityStartedAt?: string;
+  eligibilityVerifiedAt?: string;
+  staffingStartedAt?: string;
+  staffAssignedAt?: string;
+  socScheduledAt?: string;
+  socCompletedAt?: string;
+  declinedAt?: string;
+}
+
+export type ServiceType = 'SN' | 'PT' | 'OT' | 'Hospice' | 'Personal Care' | 'Catastrophic Care';
+
 export interface Referral {
   id: string;
   patientInitials: string;
@@ -52,7 +67,8 @@ export interface Referral {
   source: string;
   dischargeFacility: string;
   dischargeDate: string;
-  slaDeadline: string;
+  slaDeadline: string;           // date-only legacy field
+  slaDeadlineAt: string;         // ISO datetime for precise SLA
   stage: ReferralStage;
   assignedOwner: string;
   branch: string;
@@ -68,10 +84,23 @@ export interface Referral {
   recommendedNextAction: string;
   readiness: ReferralReadiness;
   timeline: ReferralTimelineEvent[];
+  stageTimestamps: StageTimestamps;
 }
+
+// --- Required Docs by Service Type ---
+export const requiredDocsByService: Record<string, string[]> = {
+  'SN':                ['Face-to-Face', 'Physician Orders', 'Insurance Card', 'Discharge Summary'],
+  'PT':                ['Face-to-Face', 'Physician Orders', 'Insurance Card', 'Discharge Summary'],
+  'OT':                ['Face-to-Face', 'Physician Orders', 'Insurance Card', 'Discharge Summary'],
+  'Hospice':           ['Hospice Order', 'Eligibility Note', 'Insurance Card', 'Face Sheet'],
+  'Personal Care':     ['Service Authorization', 'Care Plan', 'Insurance/Medicaid Info'],
+  'Catastrophic Care': ['Orders', 'Case Manager Contact', 'Authorization', 'Care Plan', 'Equipment/Supplies'],
+};
 
 // --- Staffing ---
 export type ShiftStatus = 'Confirmed' | 'Unconfirmed' | 'Declined';
+
+export type SkillTag = 'wound care' | 'IV' | 'vent/trach' | 'TBI' | 'SCI' | 'hospice' | 'pediatric' | 'ADL';
 
 export interface StaffMember {
   id: string;
@@ -79,13 +108,14 @@ export interface StaffMember {
   role: string;
   location: string;
   specialty: string[];
+  skillTags: SkillTag[];
   availability: 'Available' | 'Partially' | 'Unavailable';
   todayVisits: number;
   maxVisits: number;
   shiftStatus: ShiftStatus;
   certifications: string[];
   overtimeRisk: 'Low' | 'Medium' | 'High';
-  continuityPatients: string[];  // patient initials for continuity scoring
+  continuityPatients: string[];
 }
 
 export interface ShiftBoardEntry {
@@ -109,7 +139,7 @@ export interface ComplianceItem {
   itemType: string;
   expiryDate: string;
   lastCompleted: string;
-  status: string; // always calculated from expiryDate
+  status: string;
 }
 
 // --- Field Visits ---
@@ -150,6 +180,7 @@ export interface FieldVisit {
   notes: string;
   acuity: 'Low' | 'Medium' | 'High';
   evvExceptions: EVVException[];
+  signatureCaptured?: boolean;
 }
 
 export interface OfflineSyncItem {
@@ -212,7 +243,7 @@ export interface PartnerTimelineEntry {
 }
 
 export interface PartnerTrend {
-  period: string;  // e.g. '30d', '60d', '90d'
+  period: string;
   volume: number;
   accepted: number;
   declined: number;
@@ -244,9 +275,19 @@ export interface ReferralPartner {
 // --- Alerts / Notifications ---
 export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low';
 
+export type AlertType =
+  | 'sla_breach' | 'sla_risk'
+  | 'expired_credential' | 'critical_soon_credential'
+  | 'uncovered_high_acuity'
+  | 'late_note' | 'missed_visit'
+  | 'rejected_oasis' | 'overdue_oasis' | 'overdue_hope'
+  | 'evv_exception'
+  | 'partner_followup_due'
+  | 'incident' | 'escalation';
+
 export interface AlertItem {
   id?: string;
-  type: 'expired_credential' | 'critical_soon_credential' | 'sla_breach' | 'sla_risk' | 'late_note' | 'uncovered_high_acuity' | 'incident' | 'escalation';
+  type: AlertType;
   severity: AlertSeverity;
   title: string;
   details: string;
@@ -257,6 +298,25 @@ export interface AlertItem {
   sourceRecordType?: string;
   sourceRecordId?: string;
   owner?: string;
+  recommendedAction?: string;
+  resolved?: boolean;
+  resolvedAt?: string;
+}
+
+// --- Catastrophic Care ---
+export interface CatastrophicCase {
+  id: string;
+  patientInitials: string;
+  conditions: ('TBI' | 'SCI' | 'wound care' | 'vent/trach' | '24-hour coverage')[];
+  payerType: 'Workers Comp' | 'Auto No-Fault' | 'Commercial' | 'Medicaid';
+  requiredSkills: SkillTag[];
+  shiftCoverage: { shift: string; covered: boolean; staffName?: string }[];
+  familyContact: string;
+  caseManagerContact: string;
+  supplyEquipmentNeeds: string[];
+  incidentTimeline: { date: string; event: string }[];
+  coverageRisk: 'Covered' | 'Partial' | 'Uncovered';
+  branch: string;
 }
 
 // --- Audit ---
@@ -296,6 +356,7 @@ export interface AppState {
   alerts: AlertItem[];
   shiftBoard: ShiftBoardEntry[];
   offlineSyncQueue: OfflineSyncItem[];
+  catastrophicCases: CatastrophicCase[];
   toasts: ToastItem[];
   lastRefreshed: string;
 }

@@ -1,12 +1,12 @@
 import { useAppState } from '../context/AppContext';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { getDaysUntilExpiry, formatDate } from '../lib/dateUtils';
-import { findDuplicateReferrals, getSLACategory, getSLALabel, calculateReadiness, getRecommendedNextAction, getStageAgingHours, getReferralToSOCDays } from '../utils/dataLogic';
+import { findDuplicateReferrals, getSLACategory, getSLALabel, calculateReadiness, getRecommendedNextAction, getStageAgingHours, getReferralToSOCDays, calculatePipelineAnalytics } from '../utils/dataLogic';
 import type { Referral, ReferralDocument } from '../types';
 import {
   ClipboardList, AlertTriangle, Clock, FileText, Upload, X,
   Eye, Brain, User, Calendar, CheckCircle, XCircle, Copy,
-  ArrowRight, Activity, Timer, BarChart3
+  ArrowRight, Activity, Timer, BarChart3, TrendingUp
 } from 'lucide-react';
 
 const stages: Referral['stage'][] = ['New', 'Missing Docs', 'Eligibility', 'Staffing', 'Scheduled', 'Started', 'Declined'];
@@ -27,9 +27,10 @@ const readinessColors: Record<string, string> = {
   'Ready for SOC': 'badge-success',
 };
 
-function SLAClock({ deadline }: { deadline: string }) {
-  const category = getSLACategory(deadline);
-  const label = getSLALabel(deadline);
+function SLAClock({ deadline, deadlineAt }: { deadline: string; deadlineAt?: string }) {
+  const target = deadlineAt || deadline;
+  const category = getSLACategory(target);
+  const label = getSLALabel(target);
   const color = category === 'Breach' ? 'text-red-600' : category === 'Risk' ? 'text-amber-600' : 'text-emerald-500';
   return (
     <span className={`flex items-center gap-1 text-xs font-medium ${color}`} data-testid="sla-clock">
@@ -86,13 +87,17 @@ function AISummary({ referral }: { referral: Referral }) {
   );
 }
 
-function DetailDrawer({ referral, onClose, onUpload, onMoveStage }: {
-  referral: Referral;
+function DetailDrawer({ referralId, onClose, onUpload, onMoveStage }: {
+  referralId: string;
   onClose: () => void;
   onUpload: (id: string, docType: string) => void;
   onMoveStage: (id: string, stage: Referral['stage']) => void;
 }) {
   const { state } = useAppState();
+  // Derive referral from state so it's always fresh
+  const referral = state.referrals.find(r => r.id === referralId);
+  if (!referral) return null;
+
   const duplicates = findDuplicateReferrals(referral, state.referrals);
   const readiness = calculateReadiness(referral);
   const nextAction = getRecommendedNextAction(referral);
@@ -130,13 +135,8 @@ function DetailDrawer({ referral, onClose, onUpload, onMoveStage }: {
             <p className="text-xs text-sky-700 flex items-center gap-1">
               <ArrowRight size={10} /> <strong>Next:</strong> {nextAction}
             </p>
-            {/* Ready for Eligibility → show move button */}
             {allDocsUploaded && referral.stage !== 'Started' && referral.stage !== 'Declined' && readiness === 'Ready for Eligibility' && (
-              <button
-                onClick={() => onMoveStage(referral.id, 'Eligibility')}
-                className="btn-primary text-xs mt-2"
-                data-testid="move-to-eligibility"
-              >
+              <button onClick={() => onMoveStage(referral.id, 'Eligibility')} className="btn-primary text-xs mt-2" data-testid="move-to-eligibility">
                 <ArrowRight size={11} /> Move to Eligibility Review
               </button>
             )}
@@ -155,7 +155,7 @@ function DetailDrawer({ referral, onClose, onUpload, onMoveStage }: {
             </div>
             <div className="p-3 bg-slate-50 rounded-lg">
               <p className="stat-label">SLA Deadline</p>
-              <SLAClock deadline={referral.slaDeadline} />
+              <SLAClock deadline={referral.slaDeadline} deadlineAt={referral.slaDeadlineAt} />
             </div>
             <div className="p-3 bg-slate-50 rounded-lg">
               <p className="stat-label">Urgency</p>
@@ -264,7 +264,8 @@ export default function Referrals() {
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
   const [filterStage, setFilterStage] = useState('All');
   const [filterUrgency, setFilterUrgency] = useState('All');
-  const [selectedReferral, setSelectedReferral] = useState<Referral | null>(null);
+  const [selectedReferralId, setSelectedReferralId] = useState<string | null>(null);
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
   const urgencies = ['All', 'Routine', 'Urgent 24-48 hours', 'Immediate'];
 
@@ -272,6 +273,8 @@ export default function Referrals() {
     (filterStage === 'All' || r.stage === filterStage) &&
     (filterUrgency === 'All' || r.urgency === filterUrgency)
   );
+
+  const analytics = useMemo(() => calculatePipelineAnalytics(state.referrals), [state.referrals]);
 
   // Lost referral reason analytics
   const declinedReferrals = state.referrals.filter(r => r.stage === 'Declined' && r.lostReason);
@@ -284,23 +287,29 @@ export default function Referrals() {
     const ref = state.referrals.find(r => r.id === id);
     if (!ref) return;
     const oldStage = ref.stage;
-    const now = new Date().toISOString().split('T')[0];
+    const now = new Date().toISOString();
+    const nowDate = now.split('T')[0];
     updateReferralStage(id, newStage);
-    // Update timeline
+    // Set stage timestamps
+    const tsUpdates: Record<string, string> = {};
+    if (newStage === 'Missing Docs' && !ref.stageTimestamps.docsRequestedAt) tsUpdates.docsRequestedAt = now;
+    if (newStage === 'Eligibility' && !ref.stageTimestamps.eligibilityStartedAt) tsUpdates.eligibilityStartedAt = now;
+    if (newStage === 'Staffing' && !ref.stageTimestamps.staffingStartedAt) tsUpdates.staffingStartedAt = now;
+    if (newStage === 'Scheduled' && !ref.stageTimestamps.socScheduledAt) tsUpdates.socScheduledAt = now;
+    if (newStage === 'Started' && !ref.stageTimestamps.socCompletedAt) tsUpdates.socCompletedAt = now;
+    if (newStage === 'Declined' && !ref.stageTimestamps.declinedAt) tsUpdates.declinedAt = now;
+
     updateReferral(id, {
-      timeline: [...ref.timeline, { date: now, action: `Stage → ${newStage}`, user: state.currentUser.name }],
+      timeline: [...ref.timeline, { date: nowDate, action: `Stage → ${newStage}`, user: state.currentUser.name }],
       readiness: calculateReadiness({ ...ref, stage: newStage }),
       recommendedNextAction: getRecommendedNextAction({ ...ref, stage: newStage }),
+      stageTimestamps: { ...ref.stageTimestamps, ...tsUpdates },
     });
     addAuditEntry({
-      user: state.currentUser.name,
-      role: state.currentUser.role,
-      action: 'Updated',
-      recordType: 'Referral',
-      recordId: id,
+      user: state.currentUser.name, role: state.currentUser.role,
+      action: 'Updated', recordType: 'Referral', recordId: id,
       details: `Stage changed to ${newStage} for ${ref.patientInitials}`,
-      before: oldStage,
-      after: newStage,
+      before: oldStage, after: newStage,
     });
     addToast(`${ref.patientInitials} moved to ${newStage}`, 'success');
   };
@@ -308,8 +317,10 @@ export default function Referrals() {
   const handleDocUpload = (referralId: string, docType: string) => {
     const ref = state.referrals.find(r => r.id === referralId);
     if (!ref) return;
+    const now = new Date().toISOString();
+    const nowDate = now.split('T')[0];
     const updatedDocs = ref.documents.map(d =>
-      d.type === docType ? { ...d, uploaded: true, uploadedAt: new Date().toISOString() } : d
+      d.type === docType ? { ...d, uploaded: true, uploadedAt: now } : d
     );
     const docsUploaded = updatedDocs.filter(d => d.uploaded).length;
     const missing = updatedDocs.filter(d => !d.uploaded).length;
@@ -317,7 +328,9 @@ export default function Referrals() {
     const allDone = updatedDocs.every(d => d.uploaded);
     const newReadiness = calculateReadiness({ ...ref, documents: updatedDocs });
     const newNextAction = getRecommendedNextAction({ ...ref, documents: updatedDocs });
-    const now = new Date().toISOString().split('T')[0];
+
+    const tsUpdates: Record<string, string> = {};
+    if (allDone && !ref.stageTimestamps.docsCompleteAt) tsUpdates.docsCompleteAt = now;
 
     updateReferral(referralId, {
       documents: updatedDocs,
@@ -326,19 +339,16 @@ export default function Referrals() {
       physicianOrdersReceived: physOrders,
       readiness: newReadiness,
       recommendedNextAction: newNextAction,
-      timeline: [...ref.timeline, { date: now, action: `Uploaded: ${docType}`, user: state.currentUser.name }],
+      timeline: [...ref.timeline, { date: nowDate, action: `Uploaded: ${docType}`, user: state.currentUser.name }],
+      stageTimestamps: { ...ref.stageTimestamps, ...tsUpdates },
     });
     addAuditEntry({
-      user: state.currentUser.name,
-      role: state.currentUser.role,
-      action: 'Updated',
-      recordType: 'Referral',
-      recordId: referralId,
+      user: state.currentUser.name, role: state.currentUser.role,
+      action: 'Updated', recordType: 'Referral', recordId: referralId,
       details: `Uploaded ${docType} for ${ref.patientInitials}`,
     });
     addToast(`${docType} uploaded for ${ref.patientInitials}`, 'success');
 
-    // Auto-transition if all docs uploaded and stage is Missing Docs or New
     if (allDone && (ref.stage === 'Missing Docs' || ref.stage === 'New')) {
       addToast(`All documents received for ${ref.patientInitials} — Ready for Eligibility Review`, 'info');
     }
@@ -359,10 +369,67 @@ export default function Referrals() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => setShowAnalytics(!showAnalytics)} className={`btn-${showAnalytics ? 'primary' : 'secondary'} text-xs py-1.5`}>
+            <TrendingUp size={13} /> Analytics
+          </button>
           <button onClick={() => setViewMode('table')} className={`btn-${viewMode === 'table' ? 'primary' : 'secondary'} text-xs py-1.5`}>Table</button>
           <button onClick={() => setViewMode('kanban')} className={`btn-${viewMode === 'kanban' ? 'primary' : 'secondary'} text-xs py-1.5`}>Kanban</button>
         </div>
       </div>
+
+      {/* Referral-to-SOC Analytics Panel */}
+      {showAnalytics && (
+        <div className="card mb-5 bg-gradient-to-r from-sky-50 to-violet-50 border-advisa-accent/20" data-testid="pipeline-analytics">
+          <p className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3"><BarChart3 size={14} className="text-advisa-accent" /> Referral-to-SOC Analytics</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div className="p-3 bg-white/60 rounded-lg text-center">
+              <p className="text-[10px] text-slate-500">Avg Referral→SOC</p>
+              <p className="text-xl font-bold text-sky-600">{analytics.avgReferralToSOC ?? '—'}d</p>
+            </div>
+            <div className="p-3 bg-white/60 rounded-lg text-center">
+              <p className="text-[10px] text-slate-500">Median Referral→SOC</p>
+              <p className="text-xl font-bold text-violet-600">{analytics.medianReferralToSOC ?? '—'}d</p>
+            </div>
+            <div className="p-3 bg-white/60 rounded-lg text-center">
+              <p className="text-[10px] text-slate-500">Stuck (&gt;48h)</p>
+              <p className="text-xl font-bold text-amber-600">{Object.values(analytics.stuckByOwner).reduce((a, b) => a + b, 0)}</p>
+            </div>
+            <div className="p-3 bg-white/60 rounded-lg text-center">
+              <p className="text-[10px] text-slate-500">Lost Referrals</p>
+              <p className="text-xl font-bold text-red-600">{Object.values(analytics.lostReasonCounts).reduce((a, b) => a + b, 0)}</p>
+            </div>
+          </div>
+
+          {/* Avg time per stage */}
+          {Object.keys(analytics.avgTimePerStage).length > 0 && (
+            <div className="mb-3">
+              <p className="text-xs font-semibold text-slate-600 mb-1">Avg Hours per Stage</p>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(analytics.avgTimePerStage).map(([stage, hrs]) => (
+                  <div key={stage} className="px-2 py-1 bg-white rounded border border-advisa-border text-xs">
+                    <span className="text-slate-500">{stage}:</span> <strong>{hrs}h</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Conversion by source */}
+          {Object.keys(analytics.conversionBySource).length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-slate-600 mb-1">Conversion by Source</p>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(analytics.conversionBySource).map(([src, data]) => (
+                  <div key={src} className="px-2 py-1 bg-white rounded border border-advisa-border text-xs">
+                    <span className="text-slate-500">{src}:</span> <strong className={data.rate >= 70 ? 'text-emerald-600' : data.rate >= 50 ? 'text-amber-600' : 'text-red-600'}>{data.rate}%</strong>
+                    <span className="text-slate-400 ml-1">({data.converted}/{data.total})</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex gap-3 mb-5 flex-wrap">
@@ -391,7 +458,6 @@ export default function Referrals() {
       )}
 
       {viewMode === 'kanban' ? (
-        /* Kanban View */
         <div className="flex gap-3 overflow-x-auto pb-4">
           {stages.filter(s => s !== 'Declined').map(stage => {
             const stageReferrals = filtered.filter(r => r.stage === stage);
@@ -402,11 +468,8 @@ export default function Referrals() {
                 </div>
                 <div className="bg-slate-50 border border-t-0 border-advisa-border rounded-b-lg p-2 space-y-2 min-h-[200px]">
                   {stageReferrals.map(r => (
-                    <div
-                      key={r.id}
-                      onClick={() => setSelectedReferral(r)}
-                      className="bg-white p-3 rounded-lg border border-advisa-border shadow-sm hover:shadow-card cursor-pointer transition-all"
-                    >
+                    <div key={r.id} onClick={() => setSelectedReferralId(r.id)}
+                      className="bg-white p-3 rounded-lg border border-advisa-border shadow-sm hover:shadow-card cursor-pointer transition-all">
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-semibold text-sm text-slate-800">{r.patientInitials}</span>
                         <span className={`badge text-[10px] ${r.urgency === 'Immediate' ? 'badge-urgent' : r.urgency.includes('Urgent') ? 'badge-warning' : 'badge-neutral'}`}>
@@ -416,7 +479,7 @@ export default function Referrals() {
                       <p className="text-[10px] text-slate-500">{r.source}</p>
                       <p className="text-[10px] text-slate-400">{r.serviceType}</p>
                       <div className="flex items-center justify-between mt-2">
-                        <SLAClock deadline={r.slaDeadline} />
+                        <SLAClock deadline={r.slaDeadline} deadlineAt={r.slaDeadlineAt} />
                         {r.documents.some(d => !d.uploaded) && (
                           <span className="text-[10px] text-red-500 flex items-center gap-0.5"><AlertTriangle size={9} /> Docs</span>
                         )}
@@ -433,7 +496,6 @@ export default function Referrals() {
           })}
         </div>
       ) : (
-        /* Table View */
         <div className="card p-0 overflow-hidden">
           <table className="w-full text-sm">
             <thead>
@@ -458,36 +520,26 @@ export default function Referrals() {
                     <td className="table-cell font-semibold text-slate-800">{r.patientInitials}</td>
                     <td className="table-cell"><span className="badge badge-info">{r.serviceType}</span></td>
                     <td className="table-cell">
-                      <span className={`badge ${r.urgency === 'Immediate' ? 'badge-urgent' : r.urgency.includes('Urgent') ? 'badge-warning' : 'badge-neutral'}`}>
-                        {r.urgency}
-                      </span>
+                      <span className={`badge ${r.urgency === 'Immediate' ? 'badge-urgent' : r.urgency.includes('Urgent') ? 'badge-warning' : 'badge-neutral'}`}>{r.urgency}</span>
                     </td>
                     <td className="table-cell text-slate-500">{r.source}</td>
                     <td className="table-cell">
                       {missingDocs > 0 ? (
-                        <span className="text-red-600 text-xs font-medium flex items-center gap-1">
-                          <AlertTriangle size={11} /> {missingDocs} missing
-                        </span>
+                        <span className="text-red-600 text-xs font-medium flex items-center gap-1"><AlertTriangle size={11} /> {missingDocs} missing</span>
                       ) : (
-                        <span className="text-emerald-600 text-xs flex items-center gap-1">
-                          <CheckCircle size={11} /> Complete
-                        </span>
+                        <span className="text-emerald-600 text-xs flex items-center gap-1"><CheckCircle size={11} /> Complete</span>
                       )}
                     </td>
-                    <td className="table-cell"><SLAClock deadline={r.slaDeadline} /></td>
+                    <td className="table-cell"><SLAClock deadline={r.slaDeadline} deadlineAt={r.slaDeadlineAt} /></td>
                     <td className="table-cell"><span className={`badge text-[10px] ${readinessColors[r.readiness]}`}>{r.readiness}</span></td>
                     <td className="table-cell text-slate-500 text-xs">{r.assignedOwner}</td>
                     <td className="table-cell">
-                      <select
-                        value={r.stage}
-                        onChange={e => handleStageChange(r.id, e.target.value as Referral['stage'])}
-                        className="text-xs px-2 py-1 border border-advisa-border rounded-md bg-white"
-                      >
+                      <select value={r.stage} onChange={e => handleStageChange(r.id, e.target.value as Referral['stage'])} className="text-xs px-2 py-1 border border-advisa-border rounded-md bg-white">
                         {stages.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </td>
                     <td className="table-cell">
-                      <button onClick={() => setSelectedReferral(r)} className="text-advisa-accent hover:text-advisa-accent-dark transition-colors">
+                      <button onClick={() => setSelectedReferralId(r.id)} className="text-advisa-accent hover:text-advisa-accent-dark transition-colors">
                         <Eye size={15} />
                       </button>
                     </td>
@@ -500,11 +552,11 @@ export default function Referrals() {
         </div>
       )}
 
-      {/* Detail Drawer */}
-      {selectedReferral && (
+      {/* Detail Drawer — uses ID, derives fresh referral from state */}
+      {selectedReferralId && (
         <DetailDrawer
-          referral={selectedReferral}
-          onClose={() => setSelectedReferral(null)}
+          referralId={selectedReferralId}
+          onClose={() => setSelectedReferralId(null)}
           onUpload={handleDocUpload}
           onMoveStage={handleStageChange}
         />

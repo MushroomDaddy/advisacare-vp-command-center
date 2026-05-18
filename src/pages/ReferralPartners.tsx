@@ -1,57 +1,34 @@
 import { useAppState } from '../context/AppContext';
 import { useState } from 'react';
 import { calculatePartnerRiskLabel } from '../utils/dataLogic';
-import type { ReferralPartner, PartnerRiskLabel } from '../types';
+import { formatDate } from '../lib/dateUtils';
 import {
-  Handshake, TrendingUp, TrendingDown, Minus, X, Eye, Phone, Mail,
-  Calendar, User, Activity, AlertTriangle, BarChart3
+  Handshake, TrendingUp, TrendingDown, AlertTriangle,
+  Mail, Phone, Calendar, Activity, X,
+  MessageSquare
 } from 'lucide-react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 
-const riskLabelColors: Record<PartnerRiskLabel, string> = {
+const riskColors: Record<string, string> = {
   'Growing': 'badge-success',
   'Stable': 'badge-info',
   'Needs Attention': 'badge-warning',
   'At Risk': 'badge-urgent',
 };
 
-const riskLabelIcons: Record<PartnerRiskLabel, React.ReactNode> = {
-  'Growing': <TrendingUp size={11} className="text-emerald-600" />,
-  'Stable': <Minus size={11} className="text-sky-600" />,
-  'Needs Attention': <AlertTriangle size={11} className="text-amber-600" />,
-  'At Risk': <TrendingDown size={11} className="text-red-600" />,
-};
+function PartnerDrawer({ partnerId, onClose, onRecordFollowUp }: {
+  partnerId: string;
+  onClose: () => void;
+  onRecordFollowUp: (id: string, notes: string) => void;
+}) {
+  const { state } = useAppState();
+  // Derive from state for fresh data
+  const partner = state.partners.find(p => p.id === partnerId);
+  const [followUpNotes, setFollowUpNotes] = useState('');
+  const [showFollowUpForm, setShowFollowUpForm] = useState(false);
 
-function PartnerDetailDrawer({ partner, onClose }: { partner: ReferralPartner; onClose: () => void }) {
-  const { state, updatePartner, addAuditEntry, addToast } = useAppState();
-  const riskLabel = calculatePartnerRiskLabel(partner);
-  const conversionRate = partner.volume > 0 ? Math.round((partner.acceptedReferrals / partner.volume) * 100) : 0;
+  if (!partner) return null;
 
-  const trendData = partner.trends.map(t => ({
-    period: t.period,
-    Volume: t.volume,
-    Accepted: t.accepted,
-    Declined: t.declined,
-  })).reverse();
-
-  const handleFollowUp = () => {
-    const now = new Date().toISOString().split('T')[0];
-    const nextDate = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
-    updatePartner(partner.id, {
-      lastFollowUp: now,
-      nextFollowUpReminder: nextDate,
-      timeline: [...partner.timeline, { date: now, action: 'Follow-up completed', user: state.currentUser.name }],
-    });
-    addAuditEntry({
-      user: state.currentUser.name,
-      role: state.currentUser.role,
-      action: 'Updated',
-      recordType: 'Partner',
-      recordId: partner.id,
-      details: `Follow-up completed for ${partner.name}. Next: ${nextDate}`,
-    });
-    addToast(`Follow-up recorded for ${partner.name}`, 'success');
-  };
+  const calculatedRisk = calculatePartnerRiskLabel(partner);
 
   return (
     <div className="fixed inset-0 z-40 flex">
@@ -60,41 +37,88 @@ function PartnerDetailDrawer({ partner, onClose }: { partner: ReferralPartner; o
         <div className="sticky top-0 bg-white border-b border-advisa-border px-5 py-4 flex items-center justify-between z-10">
           <div>
             <p className="text-lg font-bold text-slate-800">{partner.name}</p>
-            <p className="text-xs text-slate-400">{partner.type} · {partner.contactName}</p>
+            <p className="text-xs text-slate-400">{partner.type}</p>
           </div>
           <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={18} /></button>
         </div>
 
         <div className="p-5 space-y-5">
-          {/* Risk Label + Scorecard */}
+          {/* Risk Label */}
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-500">Risk Assessment</span>
+            <span className={`badge ${riskColors[calculatedRisk]}`}>{calculatedRisk}</span>
+          </div>
+
+          {/* Stats */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="p-3 bg-slate-50 rounded-lg">
-              <p className="stat-label">Risk Label</p>
-              <span className={`badge ${riskLabelColors[riskLabel]} mt-1 flex items-center gap-1 w-fit`}>
-                {riskLabelIcons[riskLabel]} {riskLabel}
-              </span>
+            <div className="p-3 bg-slate-50 rounded-lg text-center">
+              <p className="stat-label">Total Volume</p>
+              <p className="stat-value text-sky-600">{partner.volume}</p>
             </div>
-            <div className="p-3 bg-slate-50 rounded-lg">
-              <p className="stat-label">Conversion Rate</p>
-              <p className={`text-xl font-bold ${conversionRate >= 70 ? 'text-emerald-600' : conversionRate >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
-                {conversionRate}%
-              </p>
+            <div className="p-3 bg-slate-50 rounded-lg text-center">
+              <p className="stat-label">Accepted</p>
+              <p className="stat-value text-emerald-600">{partner.acceptedReferrals}</p>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-lg text-center">
+              <p className="stat-label">Declined</p>
+              <p className="stat-value text-red-600">{partner.declinedReferrals}</p>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-lg text-center">
+              <p className="stat-label">Avg Time to SOC</p>
+              <p className="stat-value text-violet-600">{partner.avgTimeToSOC}</p>
             </div>
           </div>
 
-          {/* Scorecard */}
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="p-3 bg-sky-50 rounded-lg"><p className="text-slate-500">30d Volume</p><p className="text-lg font-bold text-sky-600">{partner.volume}</p></div>
-            <div className="p-3 bg-emerald-50 rounded-lg"><p className="text-slate-500">Accepted</p><p className="text-lg font-bold text-emerald-600">{partner.acceptedReferrals}</p></div>
-            <div className="p-3 bg-red-50 rounded-lg"><p className="text-slate-500">Declined</p><p className="text-lg font-bold text-red-600">{partner.declinedReferrals}</p></div>
-            <div className="p-3 bg-violet-50 rounded-lg"><p className="text-slate-500">Avg Referral→SOC</p><p className="text-lg font-bold text-violet-600">{partner.avgTimeToSOC}</p></div>
+          {/* Conversion Rate */}
+          <div className="p-3 bg-sky-50 border border-sky-200 rounded-lg">
+            <p className="text-xs font-semibold text-sky-800 mb-1">Conversion Rate</p>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-3 bg-sky-100 rounded-full overflow-hidden">
+                <div className="h-full bg-sky-500 rounded-full" style={{ width: `${partner.volume > 0 ? (partner.acceptedReferrals / partner.volume) * 100 : 0}%` }} />
+              </div>
+              <span className="text-sm font-bold text-sky-700">
+                {partner.volume > 0 ? Math.round((partner.acceptedReferrals / partner.volume) * 100) : 0}%
+              </span>
+            </div>
           </div>
+
+          {/* Contact Info */}
+          <div className="p-3 bg-slate-50 rounded-lg space-y-2">
+            <p className="text-xs font-semibold text-slate-700">Contact</p>
+            <p className="text-xs text-slate-600">{partner.contactName}</p>
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Mail size={11} /> {partner.contactEmail}
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Phone size={11} /> {partner.contactPhone}
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Calendar size={11} /> Last follow-up: {formatDate(partner.lastFollowUp)}
+            </div>
+          </div>
+
+          {/* Trends */}
+          {partner.trends.length > 0 && (
+            <div>
+              <p className="section-title mb-2">Volume Trends</p>
+              <div className="space-y-1.5">
+                {partner.trends.map((t, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 rounded text-xs">
+                    <span className="text-slate-500">{t.period}</span>
+                    <span className="text-slate-700">Vol: <strong>{t.volume}</strong></span>
+                    <span className="text-emerald-600">Acc: {t.accepted}</span>
+                    <span className="text-red-600">Dec: {t.declined}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Lost Reasons */}
           {partner.lostReasons.length > 0 && (
             <div>
               <p className="section-title mb-2">Lost Reasons</p>
-              <div className="flex gap-1.5 flex-wrap">
+              <div className="flex flex-wrap gap-1.5">
                 {partner.lostReasons.map(r => (
                   <span key={r} className="badge badge-urgent text-[10px]">{r}</span>
                 ))}
@@ -102,53 +126,55 @@ function PartnerDetailDrawer({ partner, onClose }: { partner: ReferralPartner; o
             </div>
           )}
 
-          {/* Contact */}
-          <div className="p-3 bg-slate-50 rounded-lg">
-            <p className="section-title mb-2">Contact</p>
-            <div className="space-y-1.5 text-xs">
-              <p className="flex items-center gap-2"><User size={11} className="text-slate-400" /> {partner.contactName}</p>
-              <p className="flex items-center gap-2"><Mail size={11} className="text-slate-400" /> {partner.contactEmail}</p>
-              <p className="flex items-center gap-2"><Phone size={11} className="text-slate-400" /> {partner.contactPhone}</p>
-              <p className="flex items-center gap-2"><User size={11} className="text-slate-400" /> Owner: <strong>{partner.relationshipOwner}</strong></p>
-            </div>
-          </div>
-
-          {/* Follow-Up */}
-          <div className="p-3 bg-slate-50 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <p className="section-title">Follow-Up</p>
-              <button onClick={handleFollowUp} className="btn-primary text-[10px] py-1 px-2">
-                <Calendar size={10} /> Record Follow-Up
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <p><span className="text-slate-400">Last:</span> <strong>{partner.lastFollowUp}</strong></p>
-              <p><span className="text-slate-400">Next:</span> <strong>{partner.nextFollowUpReminder}</strong></p>
-            </div>
-          </div>
-
-          {/* Trend Chart */}
-          {trendData.length > 0 && (
-            <div>
-              <p className="section-title mb-2 flex items-center gap-2"><BarChart3 size={13} /> 30/60/90 Day Trend</p>
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={trendData}>
-                  <XAxis dataKey="period" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                  <Tooltip />
-                  <Legend wrapperStyle={{ fontSize: 10 }} />
-                  <Bar dataKey="Volume" fill="#0ea5e9" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="Accepted" fill="#10b981" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="Declined" fill="#ef4444" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+          {/* Notes */}
+          {partner.notes && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+              <p className="font-semibold mb-1">Notes</p>
+              <p>{partner.notes}</p>
             </div>
           )}
+
+          {/* Record Follow-Up */}
+          <div>
+            {!showFollowUpForm ? (
+              <button onClick={() => setShowFollowUpForm(true)} className="btn-primary text-sm w-full">
+                <MessageSquare size={14} /> Record Follow-Up
+              </button>
+            ) : (
+              <div className="p-3 bg-sky-50 border border-sky-200 rounded-lg space-y-2">
+                <p className="text-xs font-semibold text-sky-800">Record Follow-Up</p>
+                <textarea
+                  className="w-full text-xs p-2 border border-sky-200 rounded-lg bg-white resize-none"
+                  rows={3}
+                  placeholder="Follow-up notes..."
+                  value={followUpNotes}
+                  onChange={e => setFollowUpNotes(e.target.value)}
+                  data-testid="followup-notes"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      if (followUpNotes.trim()) {
+                        onRecordFollowUp(partner.id, followUpNotes);
+                        setFollowUpNotes('');
+                        setShowFollowUpForm(false);
+                      }
+                    }}
+                    className="btn-primary text-xs flex-1"
+                    data-testid="submit-followup"
+                  >
+                    Save Follow-Up
+                  </button>
+                  <button onClick={() => setShowFollowUpForm(false)} className="btn-secondary text-xs">Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Timeline */}
           {partner.timeline.length > 0 && (
             <div>
-              <p className="section-title mb-2 flex items-center gap-2"><Activity size={13} /> Activity Timeline</p>
+              <p className="section-title mb-2 flex items-center gap-2"><Activity size={13} /> Timeline</p>
               <div className="space-y-2 relative pl-4 border-l-2 border-advisa-border">
                 {partner.timeline.map((event, idx) => (
                   <div key={idx} className="relative">
@@ -160,14 +186,6 @@ function PartnerDetailDrawer({ partner, onClose }: { partner: ReferralPartner; o
               </div>
             </div>
           )}
-
-          {/* Notes */}
-          {partner.notes && (
-            <div>
-              <p className="section-title mb-1">Notes</p>
-              <p className="text-xs text-slate-600 p-2 bg-slate-50 rounded">{partner.notes}</p>
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -175,18 +193,33 @@ function PartnerDetailDrawer({ partner, onClose }: { partner: ReferralPartner; o
 }
 
 export default function ReferralPartners() {
-  const { state } = useAppState();
-  const [selectedPartner, setSelectedPartner] = useState<ReferralPartner | null>(null);
-  const [filterRisk, setFilterRisk] = useState<PartnerRiskLabel | 'All'>('All');
+  const { state, updatePartner, addAuditEntry, addToast } = useAppState();
+  const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
+  const [filterType, setFilterType] = useState('All');
 
-  const filtered = state.partners.filter(p =>
-    filterRisk === 'All' || p.riskLabel === filterRisk
-  );
+  const types = ['All', ...new Set(state.partners.map(p => p.type))];
+  const filtered = state.partners.filter(p => filterType === 'All' || p.type === filterType);
 
-  const totalVolume = state.partners.reduce((s, p) => s + p.volume, 0);
-  const totalAccepted = state.partners.reduce((s, p) => s + p.acceptedReferrals, 0);
-  const overallConversion = totalVolume > 0 ? Math.round((totalAccepted / totalVolume) * 100) : 0;
-  const followUpsDue = state.partners.filter(p => p.nextFollowUpReminder <= new Date().toISOString().split('T')[0]).length;
+  const handleRecordFollowUp = (partnerId: string, notes: string) => {
+    const partner = state.partners.find(p => p.id === partnerId);
+    if (!partner) return;
+    const today = new Date().toISOString().split('T')[0];
+    updatePartner(partnerId, {
+      lastFollowUp: today,
+      nextFollowUpReminder: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+      timeline: [...partner.timeline, { date: today, action: `Follow-up: ${notes}`, user: state.currentUser.name }],
+      notes: notes,
+    });
+    addAuditEntry({
+      user: state.currentUser.name, role: state.currentUser.role,
+      action: 'Updated', recordType: 'Partner', recordId: partnerId,
+      details: `Follow-up recorded for ${partner.name}: ${notes}`,
+    });
+    addToast(`Follow-up recorded for ${partner.name}`, 'success');
+  };
+
+  // Follow-up overdue partners
+  const overduePartners = state.partners.filter(p => new Date(p.nextFollowUpReminder) <= new Date());
 
   return (
     <div>
@@ -197,102 +230,93 @@ export default function ReferralPartners() {
             Referral Partners
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            {state.partners.length} partners · {totalVolume} referrals (30d) · {overallConversion}% conversion
-            {followUpsDue > 0 && <span className="text-amber-600"> · {followUpsDue} follow-up{followUpsDue > 1 ? 's' : ''} due</span>}
+            {state.partners.length} partners · {overduePartners.length} follow-ups overdue
           </p>
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-        <div className="stat-card">
-          <p className="stat-label">Total Volume (30d)</p>
-          <p className="stat-value text-sky-600">{totalVolume}</p>
+      {/* Overdue Follow-Up Warning */}
+      {overduePartners.length > 0 && (
+        <div className="card mb-5 bg-amber-50/50 border-amber-200">
+          <p className="section-title text-amber-800 mb-2 flex items-center gap-2"><AlertTriangle size={13} /> Follow-Up Overdue</p>
+          <div className="flex flex-wrap gap-2">
+            {overduePartners.map(p => (
+              <button key={p.id} onClick={() => setSelectedPartnerId(p.id)} className="px-3 py-1.5 bg-white border border-amber-200 rounded-lg text-xs text-amber-800 hover:bg-amber-50">
+                {p.name} — due {formatDate(p.nextFollowUpReminder)}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="stat-card">
-          <p className="stat-label">Conversion</p>
-          <p className={`stat-value ${overallConversion >= 70 ? 'text-emerald-600' : overallConversion >= 50 ? 'text-amber-600' : 'text-red-600'}`}>{overallConversion}%</p>
-        </div>
-        <div className="stat-card">
-          <p className="stat-label">At Risk Partners</p>
-          <p className="stat-value text-red-600">{state.partners.filter(p => p.riskLabel === 'At Risk' || p.riskLabel === 'Needs Attention').length}</p>
-        </div>
-        <div className="stat-card">
-          <p className="stat-label">Follow-ups Due</p>
-          <p className="stat-value text-amber-600">{followUpsDue}</p>
-        </div>
-      </div>
+      )}
 
-      {/* Filters */}
+      {/* Filter */}
       <div className="flex gap-3 mb-5">
-        <select className="select" value={filterRisk} onChange={e => setFilterRisk(e.target.value as PartnerRiskLabel | 'All')}>
-          <option value="All">All Risk Labels</option>
-          <option value="Growing">Growing</option>
-          <option value="Stable">Stable</option>
-          <option value="Needs Attention">Needs Attention</option>
-          <option value="At Risk">At Risk</option>
+        <select className="select" value={filterType} onChange={e => setFilterType(e.target.value)}>
+          {types.map(t => <option key={t} value={t}>{t === 'All' ? 'All Types' : t}</option>)}
         </select>
       </div>
 
-      {/* Partners Table */}
-      <div className="card p-0 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr>
-              <th className="table-head">Partner</th>
-              <th className="table-head">Type</th>
-              <th className="table-head">Volume (30d)</th>
-              <th className="table-head">Accepted</th>
-              <th className="table-head">Declined</th>
-              <th className="table-head">Conversion</th>
-              <th className="table-head">Avg SOC Time</th>
-              <th className="table-head">Risk</th>
-              <th className="table-head">Next Follow-up</th>
-              <th className="table-head">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(p => {
-              const conv = p.volume > 0 ? Math.round((p.acceptedReferrals / p.volume) * 100) : 0;
-              const followUpDue = p.nextFollowUpReminder <= new Date().toISOString().split('T')[0];
-              return (
-                <tr key={p.id} className={`hover:bg-slate-50 transition-colors ${followUpDue ? 'bg-amber-50/30' : ''}`}>
-                  <td className="table-cell font-semibold text-slate-800">{p.name}</td>
-                  <td className="table-cell"><span className="badge badge-info text-[10px]">{p.type}</span></td>
-                  <td className="table-cell">{p.volume}</td>
-                  <td className="table-cell text-emerald-600">{p.acceptedReferrals}</td>
-                  <td className="table-cell text-red-500">{p.declinedReferrals}</td>
-                  <td className="table-cell">
-                    <span className={`font-semibold ${conv >= 70 ? 'text-emerald-600' : conv >= 50 ? 'text-amber-600' : 'text-red-600'}`}>{conv}%</span>
-                  </td>
-                  <td className="table-cell text-slate-500">{p.avgTimeToSOC}</td>
-                  <td className="table-cell">
-                    <span className={`badge ${riskLabelColors[p.riskLabel]} flex items-center gap-1 w-fit`}>
-                      {riskLabelIcons[p.riskLabel]} {p.riskLabel}
-                    </span>
-                  </td>
-                  <td className="table-cell">
-                    <span className={followUpDue ? 'text-amber-600 font-medium' : 'text-slate-500'}>
-                      {p.nextFollowUpReminder}
-                      {followUpDue && <AlertTriangle size={10} className="inline ml-1 text-amber-500" />}
-                    </span>
-                  </td>
-                  <td className="table-cell">
-                    <button onClick={() => setSelectedPartner(p)} className="text-advisa-accent hover:text-advisa-accent-dark">
-                      <Eye size={15} />
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {filtered.length === 0 && <div className="text-center py-12 text-slate-400 text-sm">No partners match your filters</div>}
+      {/* Partner Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {filtered.map(partner => {
+          const risk = calculatePartnerRiskLabel(partner);
+          const convRate = partner.volume > 0 ? Math.round((partner.acceptedReferrals / partner.volume) * 100) : 0;
+          const isOverdue = new Date(partner.nextFollowUpReminder) <= new Date();
+
+          return (
+            <div key={partner.id}
+              onClick={() => setSelectedPartnerId(partner.id)}
+              className={`card cursor-pointer hover:shadow-card transition-all ${isOverdue ? 'border-amber-200' : ''}`}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-sm font-bold text-slate-800">{partner.name}</p>
+                  <p className="text-[10px] text-slate-400">{partner.type} · Owner: {partner.relationshipOwner}</p>
+                </div>
+                <span className={`badge ${riskColors[risk]}`}>
+                  {risk === 'Growing' && <TrendingUp size={10} />}
+                  {risk === 'At Risk' && <TrendingDown size={10} />}
+                  {risk}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <div className="text-center p-1.5 bg-slate-50 rounded text-[10px]">
+                  <p className="font-semibold text-slate-700">{partner.volume}</p>
+                  <p className="text-slate-400">Volume</p>
+                </div>
+                <div className="text-center p-1.5 bg-slate-50 rounded text-[10px]">
+                  <p className={`font-semibold ${convRate >= 70 ? 'text-emerald-600' : convRate >= 50 ? 'text-amber-600' : 'text-red-600'}`}>{convRate}%</p>
+                  <p className="text-slate-400">Conv Rate</p>
+                </div>
+                <div className="text-center p-1.5 bg-slate-50 rounded text-[10px]">
+                  <p className="font-semibold text-violet-600">{partner.avgTimeToSOC}</p>
+                  <p className="text-slate-400">Avg SOC</p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-slate-400">Follow-up: {formatDate(partner.nextFollowUpReminder)}</span>
+                {isOverdue && (
+                  <span className="text-amber-600 flex items-center gap-0.5">
+                    <AlertTriangle size={9} /> Overdue
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Detail Drawer */}
-      {selectedPartner && (
-        <PartnerDetailDrawer partner={selectedPartner} onClose={() => setSelectedPartner(null)} />
+      {filtered.length === 0 && <p className="text-sm text-slate-400 text-center py-8">No partners match your filter</p>}
+
+      {/* Partner Drawer — uses ID, derives fresh partner from state */}
+      {selectedPartnerId && (
+        <PartnerDrawer
+          partnerId={selectedPartnerId}
+          onClose={() => setSelectedPartnerId(null)}
+          onRecordFollowUp={handleRecordFollowUp}
+        />
       )}
     </div>
   );

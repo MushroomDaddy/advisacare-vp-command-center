@@ -11,7 +11,7 @@ import {
 type QualityTab = 'watchboard' | 'oasis' | 'hope' | 'cahps';
 
 function Watchboard() {
-  const { state, updateQualityStatus, addAuditEntry, addToast } = useAppState();
+  const { state, updateQuality, addAuditEntry, addToast } = useAppState();
   const riskScore = calculateQualityRiskScore(state.quality, state.oasisAssessments, state.hopeAssessments, state.visits);
   const [filterType, setFilterType] = useState('All');
 
@@ -20,7 +20,7 @@ function Watchboard() {
 
   const handleStatusChange = (id: string, status: QualityItem['status']) => {
     const item = state.quality.find(q => q.id === id);
-    updateQualityStatus(id, status);
+    updateQuality(id, { status });
     addAuditEntry({
       user: state.currentUser.name,
       role: state.currentUser.role,
@@ -145,11 +145,11 @@ function OASISQueue() {
         </div>
         <div className="stat-card">
           <p className="stat-label">Submitted</p>
-          <p className="stat-value text-amber-600">{qao.submitted}</p>
+          <p className="stat-value text-amber-600">{state.oasisAssessments.filter(o => o.status === 'Submitted').length}</p>
         </div>
         <div className="stat-card">
           <p className="stat-label">Rejected</p>
-          <p className="stat-value text-red-600">{qao.rejected}</p>
+          <p className="stat-value text-red-600">{state.oasisAssessments.filter(o => o.status === 'Rejected').length}</p>
         </div>
         <div className="stat-card">
           <p className="stat-label">QAO %</p>

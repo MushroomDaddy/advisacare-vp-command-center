@@ -4,17 +4,42 @@ import type { FieldVisit, EVVExceptionType, OfflineSyncItem } from '../types';
 import {
   Smartphone, MapPin, CheckCircle, XCircle, AlertTriangle,
   Navigation, Wifi, WifiOff, Play, Square, ChevronDown,
-  ChevronUp, RotateCcw
+  ChevronUp, RotateCcw, PenTool, Home, ClipboardList, Star, Settings
 } from 'lucide-react';
 
 const evvExceptionTypes: EVVExceptionType[] = ['GPS Mismatch', 'Missed Clock-In', 'Late Clock-Out', 'No Signature', 'Offline Sync'];
 
-function VisitCard({ visit, onStartVisit, onEndVisit, onChecklistToggle, onAddException }: {
+function SignatureModal({ onCapture, onClose }: { onCapture: () => void; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-2xl p-5 w-80">
+        <p className="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2">
+          <PenTool size={14} className="text-advisa-accent" /> Capture Signature
+        </p>
+        <p className="text-xs text-slate-500 mb-3">
+          In production, this would open a signature pad. For demo, click below to simulate capture.
+        </p>
+        <div className="border-2 border-dashed border-slate-300 rounded-lg h-24 flex items-center justify-center mb-4 text-slate-400 text-xs">
+          [ Signature Pad Placeholder ]
+        </div>
+        <div className="flex gap-2">
+          <button onClick={onCapture} className="btn-primary text-sm flex-1" data-testid="confirm-signature">
+            <CheckCircle size={14} /> Confirm Signature
+          </button>
+          <button onClick={onClose} className="btn-secondary text-sm">Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VisitCard({ visit, onStartVisit, onEndVisit, onChecklistToggle, onAddException, onCaptureSignature }: {
   visit: FieldVisit;
   onStartVisit: (id: string) => void;
   onEndVisit: (id: string) => void;
   onChecklistToggle: (visitId: string, taskIndex: number, completed: boolean) => void;
   onAddException: (visitId: string, type: EVVExceptionType, reason: string) => void;
+  onCaptureSignature: (visitId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [showExceptionForm, setShowExceptionForm] = useState(false);
@@ -23,7 +48,9 @@ function VisitCard({ visit, onStartVisit, onEndVisit, onChecklistToggle, onAddEx
 
   const completedTasks = visit.checklist.filter(t => t.completed).length;
   const allCompleted = completedTasks === visit.checklist.length;
-  const hasSignature = visit.evv.patientSignature || visit.evv.caregiverSignature;
+  const hasSigOrException = visit.signatureCaptured || visit.evv.patientSignature || visit.evvExceptions.some(e => e.type === 'No Signature');
+  const hasClockIn = !!visit.evv.clockIn;
+  const canEndVisit = allCompleted && hasSigOrException && hasClockIn;
 
   const statusColor = visit.visitStatus === 'Completed' ? 'border-emerald-200 bg-emerald-50'
     : visit.visitStatus === 'In Progress' ? 'border-sky-200 bg-sky-50'
@@ -31,16 +58,14 @@ function VisitCard({ visit, onStartVisit, onEndVisit, onChecklistToggle, onAddEx
     : 'border-advisa-border bg-white';
 
   const handleEndVisit = () => {
-    if (!allCompleted) {
-      // Cannot end without required checklist
-      return;
-    }
-    if (!hasSignature) {
-      // Require exception if no signature
+    if (!allCompleted) return;
+    if (!hasSigOrException) {
+      // Prompt for signature or exception
       setShowExceptionForm(true);
       setExceptionType('No Signature');
       return;
     }
+    if (!hasClockIn) return;
     onEndVisit(visit.id);
   };
 
@@ -49,12 +74,18 @@ function VisitCard({ visit, onStartVisit, onEndVisit, onChecklistToggle, onAddEx
       onAddException(visit.id, exceptionType, exceptionReason);
       setShowExceptionForm(false);
       setExceptionReason('');
-      // If this was a "No Signature" exception during end-visit, also end the visit
-      if (exceptionType === 'No Signature') {
+      // If this was a "No Signature" exception during end-visit attempt, also end the visit
+      if (exceptionType === 'No Signature' && allCompleted && hasClockIn) {
         onEndVisit(visit.id);
       }
     }
   };
+
+  // Reasons why End Visit is blocked
+  const blockReasons: string[] = [];
+  if (!allCompleted) blockReasons.push('Complete all checklist items');
+  if (!hasSigOrException) blockReasons.push('Capture signature or submit exception');
+  if (!hasClockIn) blockReasons.push('Clock-in required');
 
   return (
     <div className={`rounded-xl border-2 shadow-sm transition-all ${statusColor}`} data-testid="visit-card">
@@ -84,8 +115,8 @@ function VisitCard({ visit, onStartVisit, onEndVisit, onChecklistToggle, onAddEx
           <span>{visit.address}</span>
         </div>
 
-        {/* Acuity + EVV Status */}
-        <div className="flex items-center gap-2 mb-3">
+        {/* Acuity + EVV Status + Signature */}
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
           <span className={`badge text-[10px] ${visit.acuity === 'High' ? 'badge-urgent' : 'badge-warning'}`}>
             {visit.acuity} Acuity
           </span>
@@ -95,6 +126,9 @@ function VisitCard({ visit, onStartVisit, onEndVisit, onChecklistToggle, onAddEx
           </span>
           {visit.evvExceptions.length > 0 && (
             <span className="badge badge-warning text-[10px]">{visit.evvExceptions.length} exception{visit.evvExceptions.length > 1 ? 's' : ''}</span>
+          )}
+          {visit.signatureCaptured && (
+            <span className="badge badge-success text-[10px]" data-testid="signature-badge"><PenTool size={8} /> Signed</span>
           )}
         </div>
 
@@ -116,12 +150,18 @@ function VisitCard({ visit, onStartVisit, onEndVisit, onChecklistToggle, onAddEx
               <Play size={14} /> Start Visit
             </button>
           )}
+          {visit.visitStatus === 'In Progress' && !visit.signatureCaptured && !visit.evv.patientSignature && (
+            <button onClick={() => onCaptureSignature(visit.id)} className="btn-secondary text-sm flex-1" data-testid="capture-signature-btn">
+              <PenTool size={14} /> Capture Signature
+            </button>
+          )}
           {visit.visitStatus === 'In Progress' && (
             <button
               onClick={handleEndVisit}
-              disabled={!allCompleted}
-              className={`text-sm flex-1 ${allCompleted ? 'btn-primary bg-emerald-600 hover:bg-emerald-700' : 'btn-secondary opacity-50 cursor-not-allowed'}`}
-              title={!allCompleted ? 'Complete all checklist items before ending visit' : undefined}
+              disabled={!canEndVisit}
+              className={`text-sm flex-1 ${canEndVisit ? 'btn-primary bg-emerald-600 hover:bg-emerald-700' : 'btn-secondary opacity-50 cursor-not-allowed'}`}
+              title={!canEndVisit ? blockReasons.join('; ') : undefined}
+              data-testid="end-visit-btn"
             >
               <Square size={14} /> End Visit
             </button>
@@ -130,9 +170,9 @@ function VisitCard({ visit, onStartVisit, onEndVisit, onChecklistToggle, onAddEx
             {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
         </div>
-        {visit.visitStatus === 'In Progress' && !allCompleted && (
+        {visit.visitStatus === 'In Progress' && blockReasons.length > 0 && (
           <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
-            <AlertTriangle size={9} /> Complete all checklist items to end visit
+            <AlertTriangle size={9} /> {blockReasons.join(' · ')}
           </p>
         )}
       </div>
@@ -188,7 +228,7 @@ function VisitCard({ visit, onStartVisit, onEndVisit, onChecklistToggle, onAddEx
               <div className="p-2 bg-slate-50 rounded">
                 <span className="text-slate-400">Signatures:</span>
                 <p className="font-semibold">
-                  {visit.evv.patientSignature ? '✅ Patient' : '❌ Patient'}
+                  {(visit.signatureCaptured || visit.evv.patientSignature) ? '✅ Patient' : '❌ Patient'}
                   {' '}
                   {visit.evv.caregiverSignature ? '✅ Caregiver' : ''}
                 </p>
@@ -304,8 +344,38 @@ function OfflineQueue({ items, onRetry }: { items: OfflineSyncItem[]; onRetry: (
   );
 }
 
+/** Bottom mobile nav for Field Staff role */
+function FieldMobileNav({ activeTab, onChangeTab }: { activeTab: string; onChangeTab: (tab: string) => void }) {
+  const tabs = [
+    { id: 'visits', label: 'Visits', icon: Home },
+    { id: 'tasks', label: 'Tasks', icon: ClipboardList },
+    { id: 'quality', label: 'Quality', icon: Star },
+    { id: 'settings', label: 'Settings', icon: Settings },
+  ];
+  return (
+    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-advisa-border z-30 flex md:hidden" data-testid="field-mobile-nav">
+      {tabs.map(tab => {
+        const Icon = tab.icon;
+        const active = activeTab === tab.id;
+        return (
+          <button
+            key={tab.id}
+            onClick={() => onChangeTab(tab.id)}
+            className={`flex-1 flex flex-col items-center py-2 text-[10px] transition-colors ${active ? 'text-advisa-accent' : 'text-slate-400'}`}
+          >
+            <Icon size={18} />
+            <span className="mt-0.5">{tab.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function FieldAssistant() {
   const { state, updateVisit, updateVisitChecklist, updateOfflineSync, addAuditEntry, addToast } = useAppState();
+  const [signatureVisitId, setSignatureVisitId] = useState<string | null>(null);
+  const [mobileTab, setMobileTab] = useState('visits');
 
   // Filter visits for current user (Field Staff = Sarah Mitchell)
   const myVisits = state.currentUser.role === 'Field Staff'
@@ -326,11 +396,8 @@ export default function FieldAssistant() {
       },
     });
     addAuditEntry({
-      user: state.currentUser.name,
-      role: state.currentUser.role,
-      action: 'Updated',
-      recordType: 'Visit',
-      recordId: visitId,
+      user: state.currentUser.name, role: state.currentUser.role,
+      action: 'Updated', recordType: 'Visit', recordId: visitId,
       details: `Started visit — EVV clock-in recorded`,
     });
     addToast('Visit started — EVV clock-in recorded', 'success');
@@ -346,15 +413,11 @@ export default function FieldAssistant() {
         ...visit.evv,
         clockOut: now,
         syncStatus: 'Synced',
-        patientSignature: visit.evv.patientSignature,
       },
     });
     addAuditEntry({
-      user: state.currentUser.name,
-      role: state.currentUser.role,
-      action: 'Updated',
-      recordType: 'Visit',
-      recordId: visitId,
+      user: state.currentUser.name, role: state.currentUser.role,
+      action: 'Updated', recordType: 'Visit', recordId: visitId,
       details: `Ended visit — EVV clock-out recorded`,
     });
     addToast('Visit completed — EVV synced', 'success');
@@ -372,14 +435,27 @@ export default function FieldAssistant() {
       evvExceptions: [...visit.evvExceptions, newException],
     });
     addAuditEntry({
-      user: state.currentUser.name,
-      role: state.currentUser.role,
-      action: 'Created',
-      recordType: 'EVV Exception',
-      recordId: visitId,
+      user: state.currentUser.name, role: state.currentUser.role,
+      action: 'Created', recordType: 'EVV Exception', recordId: visitId,
       details: `EVV exception: ${type} — ${reason}`,
     });
     addToast(`EVV exception reported: ${type}`, 'warning');
+  };
+
+  const handleCaptureSignature = (visitId: string) => {
+    setSignatureVisitId(visitId);
+  };
+
+  const handleConfirmSignature = () => {
+    if (!signatureVisitId) return;
+    updateVisit(signatureVisitId, { signatureCaptured: true });
+    addAuditEntry({
+      user: state.currentUser.name, role: state.currentUser.role,
+      action: 'Updated', recordType: 'Visit', recordId: signatureVisitId,
+      details: `Patient/caregiver signature captured`,
+    });
+    addToast('Signature captured', 'success');
+    setSignatureVisitId(null);
   };
 
   const handleRetrySync = (itemId: string) => {
@@ -393,8 +469,10 @@ export default function FieldAssistant() {
   const completed = myVisits.filter(v => v.visitStatus === 'Completed').length;
   const missed = myVisits.filter(v => v.visitStatus === 'Missed').length;
 
+  const isFieldStaff = state.currentUser.role === 'Field Staff';
+
   return (
-    <div className="max-w-lg mx-auto">
+    <div className={`max-w-lg mx-auto ${isFieldStaff ? 'pb-20' : ''}`}>
       <div className="mb-6">
         <h2 className="page-title flex items-center gap-2">
           <Smartphone size={22} className="text-advisa-accent" />
@@ -450,10 +528,22 @@ export default function FieldAssistant() {
               onEndVisit={handleEndVisit}
               onChecklistToggle={handleChecklistToggle}
               onAddException={handleAddException}
+              onCaptureSignature={handleCaptureSignature}
             />
           ))
         }
       </div>
+
+      {/* Signature Modal */}
+      {signatureVisitId && (
+        <SignatureModal
+          onCapture={handleConfirmSignature}
+          onClose={() => setSignatureVisitId(null)}
+        />
+      )}
+
+      {/* Mobile Nav for Field Staff */}
+      {isFieldStaff && <FieldMobileNav activeTab={mobileTab} onChangeTab={setMobileTab} />}
     </div>
   );
 }
