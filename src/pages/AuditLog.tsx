@@ -1,5 +1,6 @@
 import { useAppState } from '../context/AppContext';
 import { useState } from 'react';
+import { FileSearch, List, Calendar, PenLine, PlusCircle, Download, Lock } from 'lucide-react';
 
 export default function AuditLog() {
   const { state } = useAppState();
@@ -8,8 +9,8 @@ export default function AuditLog() {
   const [filterType, setFilterType] = useState('All');
   
   const roles = ['All', 'VP', 'Intake Coordinator', 'Scheduler', 'Field Staff', 'Compliance Admin'];
-  const actions = ['All', 'Created', 'Updated', 'Deleted', 'Exported'];
-  const types = ['All', 'Referral', 'Staff', 'Compliance', 'Quality', 'Partner'];
+  const actions = ['All', 'Created', 'Updated', 'Deleted', 'Exported', 'Viewed'];
+  const types = ['All', 'Referral', 'Staff', 'Compliance', 'Visit', 'Quality', 'Partner'];
   
   const filtered = state.auditLog.filter(entry => 
     (filterRole === 'All' || entry.role === filterRole) &&
@@ -19,110 +20,89 @@ export default function AuditLog() {
 
   const stats = {
     total: state.auditLog.length,
-    today: state.auditLog.filter(e => {
-      const d = new Date(e.timestamp);
-      const today = new Date();
-      return d.toDateString() === today.toDateString();
-    }).length,
+    today: state.auditLog.filter(e => new Date(e.timestamp).toDateString() === new Date().toDateString()).length,
     updates: state.auditLog.filter(e => e.action === 'Updated').length,
     creates: state.auditLog.filter(e => e.action === 'Created').length,
   };
 
-  const getActionColor = (action: string) => {
-    if (action === 'Created') return 'text-hipaa-green';
-    if (action === 'Updated') return 'text-hipaa-yellow';
-    if (action === 'Deleted') return 'text-hipaa-red';
-    return 'text-gray-600';
+  const getActionBadge = (action: string) => {
+    if (action === 'Created') return 'badge-success';
+    if (action === 'Updated') return 'badge-warning';
+    if (action === 'Deleted') return 'badge-urgent';
+    return 'badge-neutral';
   };
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-advisa-primary mb-6">Audit Log</h2>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h2 className="page-title flex items-center gap-2">
+            <FileSearch size={22} className="text-advisa-accent" />
+            Audit Log
+          </h2>
+          <p className="text-xs text-slate-400 mt-1">{stats.total} entries · {stats.today} today</p>
+        </div>
+        <button className="btn-secondary"><Download size={15} />Export Log</button>
+      </div>
       
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="card hover:shadow-md transition-shadow">
-          <p className="text-sm text-gray-500">Total Entries</p>
-          <p className="text-3xl font-bold text-advisa-primary">{stats.total}</p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+        <div className="stat-card">
+          <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center mb-2"><List size={16} className="text-slate-600" /></div>
+          <p className="stat-label">Total</p>
+          <p className="stat-value text-slate-800">{stats.total}</p>
         </div>
-        <div className="card hover:shadow-md transition-shadow">
-          <p className="text-sm text-gray-500">Today</p>
-          <p className="text-3xl font-bold text-hipaa-green">{stats.today}</p>
+        <div className="stat-card">
+          <div className="w-8 h-8 bg-sky-50 rounded-lg flex items-center justify-center mb-2"><Calendar size={16} className="text-sky-600" /></div>
+          <p className="stat-label">Today</p>
+          <p className="stat-value text-sky-600">{stats.today}</p>
         </div>
-        <div className="card hover:shadow-md transition-shadow">
-          <p className="text-sm text-gray-500">Updates</p>
-          <p className="text-3xl font-bold text-hipaa-yellow">{stats.updates}</p>
+        <div className="stat-card">
+          <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center mb-2"><PenLine size={16} className="text-amber-600" /></div>
+          <p className="stat-label">Updates</p>
+          <p className="stat-value text-amber-600">{stats.updates}</p>
         </div>
-        <div className="card hover:shadow-md transition-shadow">
-          <p className="text-sm text-gray-500">Creates</p>
-          <p className="text-3xl font-bold text-hipaa-green">{stats.creates}</p>
+        <div className="stat-card">
+          <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center mb-2"><PlusCircle size={16} className="text-emerald-600" /></div>
+          <p className="stat-label">Creates</p>
+          <p className="stat-value text-emerald-600">{stats.creates}</p>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-4 mb-6 flex-wrap">
-        <select 
-          className="px-4 py-2 border border-gray-200 rounded-lg text-sm"
-          value={filterRole}
-          onChange={(e) => setFilterRole(e.target.value)}
-        >
-          {roles.map(r => <option key={r}>{r}</option>)}
+      <div className="flex gap-3 mb-5 flex-wrap">
+        <select className="select" value={filterRole} onChange={(e) => setFilterRole(e.target.value)}>
+          {roles.map(r => <option key={r}>{r === 'All' ? 'All Roles' : r}</option>)}
         </select>
-        <select 
-          className="px-4 py-2 border border-gray-200 rounded-lg text-sm"
-          value={filterAction}
-          onChange={(e) => setFilterAction(e.target.value)}
-        >
-          {actions.map(a => <option key={a}>{a}</option>)}
+        <select className="select" value={filterAction} onChange={(e) => setFilterAction(e.target.value)}>
+          {actions.map(a => <option key={a}>{a === 'All' ? 'All Actions' : a}</option>)}
         </select>
-        <select 
-          className="px-4 py-2 border border-gray-200 rounded-lg text-sm"
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-        >
-          {types.map(t => <option key={t}>{t}</option>)}
+        <select className="select" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+          {types.map(t => <option key={t}>{t === 'All' ? 'All Types' : t}</option>)}
         </select>
-        <button className="px-4 py-2 bg-advisa-primary text-white rounded-lg text-sm hover:bg-advisa-secondary">
-          Export Log
-        </button>
       </div>
 
-      {/* Audit Table */}
-      <div className="card overflow-x-auto">
+      <div className="card p-0 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100">
-              <th className="text-left py-3 px-2">Timestamp</th>
-              <th className="text-left py-3 px-2">User</th>
-              <th className="text-left py-3 px-2">Role</th>
-              <th className="text-left py-3 px-2">Action</th>
-              <th className="text-left py-3 px-2">Record Type</th>
-              <th className="text-left py-3 px-2">Record ID</th>
-              <th className="text-left py-3 px-2">Details</th>
+            <tr>
+              <th className="table-head">Timestamp</th>
+              <th className="table-head">User</th>
+              <th className="table-head">Role</th>
+              <th className="table-head">Action</th>
+              <th className="table-head">Record</th>
+              <th className="table-head">ID</th>
+              <th className="table-head">Details</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((entry) => (
-              <tr key={entry.id} className="border-b border-gray-50 hover:bg-gray-50">
-                <td className="py-3 px-2 text-gray-500 font-mono text-xs">
-                  {new Date(entry.timestamp).toLocaleString()}
-                </td>
-                <td className="py-3 px-2 font-medium">{entry.user}</td>
-                <td className="py-3 px-2">
-                  <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">
-                    {entry.role}
-                  </span>
-                </td>
-                <td className="py-3 px-2">
-                  <span className={`font-medium ${getActionColor(entry.action)}`}>
-                    {entry.action}
-                  </span>
-                </td>
-                <td className="py-3 px-2 text-gray-600">{entry.recordType}</td>
-                <td className="py-3 px-2 text-gray-400 font-mono text-xs">{entry.recordId}</td>
-                <td className="py-3 px-2 text-gray-600 text-xs max-w-[300px] truncate">
-                  {entry.details}
-                </td>
+              <tr key={entry.id} className="hover:bg-slate-50 transition-colors">
+                <td className="table-cell text-slate-400 font-mono text-[11px]">{new Date(entry.timestamp).toLocaleString()}</td>
+                <td className="table-cell font-semibold text-slate-800">{entry.user}</td>
+                <td className="table-cell"><span className="badge badge-neutral">{entry.role}</span></td>
+                <td className="table-cell"><span className={`badge ${getActionBadge(entry.action)}`}>{entry.action}</span></td>
+                <td className="table-cell text-slate-600">{entry.recordType}</td>
+                <td className="table-cell text-slate-400 font-mono text-[11px]">{entry.recordId}</td>
+                <td className="table-cell text-slate-500 text-xs max-w-[280px] truncate">{entry.details}</td>
               </tr>
             ))}
           </tbody>
@@ -130,20 +110,16 @@ export default function AuditLog() {
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-center py-8 text-gray-400">
-          No audit entries match your filters
-        </div>
+        <div className="text-center py-12 text-slate-400 text-sm">No audit entries match your filters</div>
       )}
 
-      {/* Security Notice */}
-      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <p className="text-sm text-blue-800 font-medium">🔒 Audit Log Security Requirements:</p>
-        <ul className="text-xs text-blue-700 mt-2 space-y-1">
-          <li>• In production, use immutable audit logging (append-only database)</li>
-          <li>• Implement cryptographic integrity verification (hash chains)</li>
-          <li>• Store logs in secure, encrypted storage with access controls</li>
-          <li>• Retain logs per HIPAA requirements (6 years minimum)</li>
-          <li>• Include IP address, user agent, and session ID in entries</li>
+      <div className="mt-5 card bg-slate-50">
+        <div className="flex items-center gap-2 mb-2"><Lock size={14} className="text-slate-500" /><p className="text-xs font-semibold text-slate-600">Security Requirements</p></div>
+        <ul className="text-[11px] text-slate-500 space-y-1">
+          <li>• Production: immutable append-only audit logging with hash chains</li>
+          <li>• Encrypted storage with strict access controls</li>
+          <li>• HIPAA minimum 6-year retention</li>
+          <li>• Include IP address, user agent, and session ID</li>
         </ul>
       </div>
     </div>

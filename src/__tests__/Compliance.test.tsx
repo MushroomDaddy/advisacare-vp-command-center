@@ -23,7 +23,7 @@ describe('Compliance Status Calculation', () => {
     // Handle multiple "All" elements
     const allFilters = screen.getAllByText('All');
     expect(allFilters.length).toBeGreaterThan(0);
-    expect(screen.getByText('Valid')).toBeInTheDocument();
+    expect(screen.getByText('Compliant')).toBeInTheDocument();
     expect(screen.getByText('Expired')).toBeInTheDocument();
   });
 });

@@ -2,18 +2,18 @@ import type { Referral, StaffMember, ComplianceItem, QualityItem } from '../type
 import { getDaysUntilExpiry } from '../lib/dateUtils';
 
 // --- 1) Compliance Status Calculation ---
-export type ComplianceCategory = 'Expired' | 'Expiring' | 'Compliant';
+export type ComplianceCategory = 'Expired' | 'Due Soon' | 'Compliant';
 
 /**
  * Returns compliance status based on days until expiry:
  * - Expired: <30 days remaining
- * - Expiring: 30-90 days remaining  
+ * - Due Soon: 30-90 days remaining  
  * - Compliant: >90 days remaining
  */
 export function getComplianceStatus(item: ComplianceItem): ComplianceCategory {
   const daysLeft = getDaysUntilExpiry(item.expiryDate);
   if (daysLeft < 30) return 'Expired';
-  if (daysLeft <= 90) return 'Expiring';
+  if (daysLeft <= 90) return 'Due Soon';
   return 'Compliant';
 }
 
@@ -58,10 +58,10 @@ export function calculateDashboardKPIs(
   ).length;
   const highRiskCases = highRiskReferrals + highRiskQuality;
 
-  // Expiring licenses = compliance items with Expiring or Expired status
+  // Expiring licenses = compliance items with Due Soon or Expired status
   const expiringLicenses = compliance.filter(item => {
     const status = getComplianceStatus(item);
-    return status === 'Expiring' || status === 'Expired';
+    return status === 'Due Soon' || status === 'Expired';
   }).length;
 
   return {

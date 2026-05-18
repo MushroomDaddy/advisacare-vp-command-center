@@ -66,8 +66,8 @@ export const seedPartners: ReferralPartner[] = [
 export const seedAuditLog: AuditEntry[] = [
   { id: 'a1', timestamp: '2026-05-18T05:30:00Z', user: 'Sarah L.', role: 'Intake Coordinator', action: 'Created', recordType: 'Referral', recordId: '1', details: 'New referral J.D. from Mercy Hospital' },
   { id: 'a2', timestamp: '2026-05-18T05:45:00Z', user: 'Mike R.', role: 'Scheduler', action: 'Updated', recordType: 'Referral', recordId: '2', details: 'Stage changed to Scheduled' },
-  { id: 'a3', timestamp: '2026-05-18T06:00:00Z', user: 'Sarah Mitchell', role: 'Field Staff', action: 'Completed', recordType: 'Quality', recordId: 'q2', details: 'QA Review for M.S. completed' },
-  { id: 'a4', timestamp: '2026-05-17T14:20:00Z', user: 'Emily T.', role: 'Intake Coordinator', action: 'Edited', recordType: 'Referral', recordId: '3', details: 'Updated insurance status to Verified' },
+  { id: 'a3', timestamp: '2026-05-18T06:00:00Z', user: 'Sarah Mitchell', role: 'Field Staff', action: 'Updated', recordType: 'Quality', recordId: 'q2', details: 'QA Review for M.S. completed' },
+  { id: 'a4', timestamp: '2026-05-17T14:20:00Z', user: 'Emily T.', role: 'Intake Coordinator', action: 'Updated', recordType: 'Referral', recordId: '3', details: 'Updated insurance status to Verified' },
   { id: 'a5', timestamp: '2026-05-17T16:45:00Z', user: 'James K.', role: 'Intake Coordinator', action: 'Created', recordType: 'Referral', recordId: '4', details: 'New referral L.K. from Regional Rehab' },
 ];
 

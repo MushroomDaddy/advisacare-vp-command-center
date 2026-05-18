@@ -1,5 +1,6 @@
 import { useAppState } from '../context/AppContext';
 import { useState, useMemo } from 'react';
+import { Users, Calendar, AlertTriangle, UserCheck, Target, ChevronDown, ChevronUp, Phone, MapPin } from 'lucide-react';
 
 export default function Staffing() {
   const { state, addAuditEntry } = useAppState();
@@ -29,9 +30,7 @@ export default function Staffing() {
 
   const getBestMatch = () => {
     const available = state.staff.filter(s => 
-      s.availability === 'Available' && 
-      s.specialties.includes('Wound Care') &&
-      s.role === 'RN'
+      s.availability === 'Available' && s.specialties.includes('Wound Care') && s.role === 'RN'
     );
     return available[0] || state.staff.find(s => s.availability === 'Available');
   };
@@ -42,7 +41,6 @@ export default function Staffing() {
     const staff = state.staff.find(s => s.id === staffId);
     if (!staff) return;
     const newAvail = staff.availability === 'Available' ? 'Unavailable' : 'Available';
-    // In real app, would update state here
     addAuditEntry({
       user: state.currentUser.name,
       role: state.currentUser.role,
@@ -55,117 +53,99 @@ export default function Staffing() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-advisa-primary mb-6">Staffing Coverage Dashboard</h2>
+      <div className="mb-6">
+        <h2 className="page-title flex items-center gap-2">
+          <Users size={22} className="text-advisa-accent" />
+          Staffing Coverage Dashboard
+        </h2>
+        <p className="text-xs text-slate-400 mt-1">{state.staff.length} team members · {filteredStaff.length} shown</p>
+      </div>
       
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="card hover:shadow-md transition-shadow">
-          <p className="text-sm text-gray-500">Today's Visits</p>
-          <p className="text-3xl font-bold text-advisa-primary">{todayVisits}</p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+        <div className="stat-card">
+          <div className="w-8 h-8 bg-sky-50 rounded-lg flex items-center justify-center mb-2"><Calendar size={16} className="text-sky-600" /></div>
+          <p className="stat-label">Today's Visits</p>
+          <p className="stat-value text-slate-800">{todayVisits}</p>
         </div>
-        <div className="card hover:shadow-md transition-shadow">
-          <p className="text-sm text-gray-500">Open Shifts</p>
-          <p className="text-3xl font-bold text-hipaa-red">{openShifts}</p>
+        <div className="stat-card">
+          <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center mb-2"><AlertTriangle size={16} className="text-red-600" /></div>
+          <p className="stat-label">Open Shifts</p>
+          <p className="stat-value text-red-600">{openShifts}</p>
         </div>
-        <div className="card hover:shadow-md transition-shadow">
-          <p className="text-sm text-gray-500">Staff Available</p>
-          <p className="text-3xl font-bold text-hipaa-green">
-            {state.staff.filter(s => s.availability === 'Available').length}
-          </p>
+        <div className="stat-card">
+          <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center mb-2"><UserCheck size={16} className="text-emerald-600" /></div>
+          <p className="stat-label">Available</p>
+          <p className="stat-value text-emerald-600">{state.staff.filter(s => s.availability === 'Available').length}</p>
         </div>
-        <div className="card hover:shadow-md transition-shadow">
-          <p className="text-sm text-gray-500">High Overtime Risk</p>
-          <p className="text-3xl font-bold text-hipaa-yellow">{highRiskUncovered}</p>
+        <div className="stat-card">
+          <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center mb-2"><AlertTriangle size={16} className="text-amber-600" /></div>
+          <p className="stat-label">High OT Risk</p>
+          <p className="stat-value text-amber-600">{highRiskUncovered}</p>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4 mb-6 flex-wrap">
-        <select 
-          className="px-4 py-2 border border-gray-200 rounded-lg"
-          value={filterRole}
-          onChange={(e) => setFilterRole(e.target.value)}
-        >
-          {roles.map(r => <option key={r}>{r}</option>)}
+      <div className="flex gap-3 mb-5 flex-wrap">
+        <select className="select" value={filterRole} onChange={(e) => setFilterRole(e.target.value)}>
+          {roles.map(r => <option key={r}>{r === 'All' ? 'All Roles' : r}</option>)}
         </select>
-        <select 
-          className="px-4 py-2 border border-gray-200 rounded-lg"
-          value={filterAvailability}
-          onChange={(e) => setFilterAvailability(e.target.value)}
-        >
-          {availabilities.map(a => <option key={a}>{a}</option>)}
+        <select className="select" value={filterAvailability} onChange={(e) => setFilterAvailability(e.target.value)}>
+          {availabilities.map(a => <option key={a}>{a === 'All' ? 'All Availability' : a}</option>)}
         </select>
-        <button className="px-4 py-2 bg-advisa-primary text-white rounded-lg text-sm hover:bg-advisa-secondary">
-          + Add Staff
-        </button>
       </div>
 
       {/* Staff Table */}
-      <div className="card overflow-x-auto">
+      <div className="card p-0 overflow-hidden mb-5">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100">
-              <th className="text-left py-3 px-2">Name</th>
-              <th className="text-left py-3 px-2">Role</th>
-              <th className="text-left py-3 px-2">Specialties</th>
-              <th className="text-left py-3 px-2">Availability</th>
-              <th className="text-left py-3 px-2">Today's Visits</th>
-              <th className="text-left py-3 px-2">Overtime Risk</th>
-              <th className="text-left py-3 px-2">Location</th>
-              <th className="text-left py-3 px-2">CPR Expiry</th>
-              <th className="text-left py-3 px-2">Actions</th>
+            <tr>
+              <th className="table-head">Name</th>
+              <th className="table-head">Role</th>
+              <th className="table-head">Specialties</th>
+              <th className="table-head">Status</th>
+              <th className="table-head">Visits</th>
+              <th className="table-head">OT Risk</th>
+              <th className="table-head">Location</th>
+              <th className="table-head">CPR Expiry</th>
+              <th className="table-head"></th>
             </tr>
           </thead>
           <tbody>
             {filteredStaff.map((staff) => (
-              <tr key={staff.id} className="border-b border-gray-50 hover:bg-gray-50">
-                <td className="py-3 px-2 font-medium">{staff.name}</td>
-                <td className="py-3 px-2">
-                  <span className="bg-advisa-primary/10 text-advisa-primary px-2 py-1 rounded text-xs font-medium">{staff.role}</span>
-                </td>
-                <td className="py-3 px-2">
+              <tr key={staff.id} className="hover:bg-slate-50 transition-colors">
+                <td className="table-cell font-semibold text-slate-800">{staff.name}</td>
+                <td className="table-cell"><span className="badge badge-info">{staff.role}</span></td>
+                <td className="table-cell">
                   <div className="flex flex-wrap gap-1">
-                    {staff.specialties.map(s => (
-                      <span key={s} className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{s}</span>
+                    {staff.specialties.slice(0, 2).map(s => (
+                      <span key={s} className="badge badge-neutral">{s}</span>
                     ))}
+                    {staff.specialties.length > 2 && <span className="text-xs text-slate-400">+{staff.specialties.length - 2}</span>}
                   </div>
                 </td>
-                <td className="py-3 px-2">
-                  <button
-                    onClick={() => handleAvailabilityToggle(staff.id)}
-                    className={
-                      staff.availability === 'Available' ? 'badge-success cursor-pointer' :
-                      staff.availability === 'Partially' ? 'badge-warning cursor-pointer' : 'badge-urgent cursor-pointer'
-                    }
-                  >
-                    {staff.availability}
-                  </button>
+                <td className="table-cell">
+                  <button onClick={() => handleAvailabilityToggle(staff.id)}
+                    className={`badge cursor-pointer ${
+                      staff.availability === 'Available' ? 'badge-success' :
+                      staff.availability === 'Partially' ? 'badge-warning' : 'badge-urgent'
+                    }`}>{staff.availability}</button>
                 </td>
-                <td className="py-3 px-2">{staff.todayVisits}</td>
-                <td className="py-3 px-2">
-                  <span className={
+                <td className="table-cell font-medium">{staff.todayVisits}</td>
+                <td className="table-cell">
+                  <span className={`badge ${
                     staff.overtimeRisk === 'High' ? 'badge-urgent' :
                     staff.overtimeRisk === 'Medium' ? 'badge-warning' : 'badge-success'
-                  }>
-                    {staff.overtimeRisk}
-                  </span>
+                  }`}>{staff.overtimeRisk}</span>
                 </td>
-                <td className="py-3 px-2 text-gray-600">{staff.location}</td>
-                <td className="py-3 px-2">
-                  <span className={
-                    new Date(staff.cprExpiry) < cprThreshold
-                      ? 'text-hipaa-red font-medium' 
-                      : 'text-gray-600'
-                  }>
-                    {staff.cprExpiry}
-                  </span>
+                <td className="table-cell text-slate-500 text-xs">{staff.location}</td>
+                <td className="table-cell">
+                  <span className={new Date(staff.cprExpiry) < cprThreshold ? 'text-red-600 font-semibold text-xs' : 'text-slate-500 text-xs'}>{staff.cprExpiry}</span>
                 </td>
-                <td className="py-3 px-2">
-                  <button 
-                    onClick={() => setSelectedStaff(selectedStaff === staff.id ? null : staff.id)}
-                    className="text-advisa-accent hover:underline text-xs"
-                  >
-                    {selectedStaff === staff.id ? 'Hide Details' : 'View Details'}
+                <td className="table-cell">
+                  <button onClick={() => setSelectedStaff(selectedStaff === staff.id ? null : staff.id)}
+                    className="text-advisa-accent hover:text-advisa-accent-dark transition-colors">
+                    {selectedStaff === staff.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   </button>
                 </td>
               </tr>
@@ -174,53 +154,36 @@ export default function Staffing() {
         </table>
       </div>
 
-      {/* Staff Detail Panel */}
-      {selectedStaff && (
-        <div className="card mt-6 bg-blue-50 border-blue-200">
-          {(() => {
-            const staff = state.staff.find(s => s.id === selectedStaff);
-            if (!staff) return null;
-            return (
-              <div>
-                <h3 className="text-lg font-semibold text-advisa-primary mb-3">
-                  {staff.name} - Details
-                </h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-gray-500">Phone</p>
-                    <p className="font-medium">{staff.phone}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">License Expiry</p>
-                    <p className="font-medium">{staff.licenseExpiry}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Today's Visits</p>
-                    <p className="font-medium">{staff.todayVisits}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Overtime Risk</p>
-                    <p className="font-medium">{staff.overtimeRisk}</p>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      )}
+      {selectedStaff && (() => {
+        const staff = state.staff.find(s => s.id === selectedStaff);
+        if (!staff) return null;
+        return (
+          <div className="card mb-5 bg-sky-50/50 border-sky-200">
+            <p className="section-title mb-3">{staff.name} — Detail</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div className="flex items-center gap-2"><Phone size={14} className="text-slate-400" /><div><p className="stat-label">Phone</p><p className="font-medium text-slate-700">{staff.phone}</p></div></div>
+              <div className="flex items-center gap-2"><MapPin size={14} className="text-slate-400" /><div><p className="stat-label">Location</p><p className="font-medium text-slate-700">{staff.location}</p></div></div>
+              <div><p className="stat-label">License Expiry</p><p className="font-medium text-slate-700">{staff.licenseExpiry}</p></div>
+              <div><p className="stat-label">All Specialties</p><div className="flex flex-wrap gap-1 mt-1">{staff.specialties.map(s => <span key={s} className="badge badge-neutral">{s}</span>)}</div></div>
+            </div>
+          </div>
+        );
+      })()}
 
-      {/* Best Match Suggestion */}
-      <div className="card mt-6 bg-gradient-to-r from-blue-50 to-green-50 border-blue-200">
-        <h3 className="text-lg font-semibold text-advisa-primary mb-3">🎯 Best Staff Match</h3>
-        <p className="text-sm text-gray-600 mb-3">For urgent referral needing Wound Care (J.D.):</p>
+      {/* Best Match */}
+      <div className="card bg-gradient-to-r from-advisa-primary to-advisa-secondary border-0 text-white">
+        <div className="flex items-center gap-2 mb-3">
+          <Target size={18} className="text-sky-300" />
+          <p className="text-sm font-semibold">Best Staff Match</p>
+        </div>
+        <p className="text-xs text-sky-200 mb-3">For urgent referral needing Wound Care (J.D.)</p>
         {bestMatch && (
-          <div className="p-4 bg-white rounded-lg border border-blue-200">
-            <p className="font-medium">{bestMatch.name} ({bestMatch.role}) - {bestMatch.specialties.join(', ')}</p>
-            <p className="text-sm text-gray-600 mt-1">
-              ✅ {bestMatch.availability} • 📍 {bestMatch.location} • 
-              ⭐ Specialties: {bestMatch.specialties.join(', ')}
+          <div className="p-4 bg-white/10 rounded-lg border border-white/15">
+            <p className="font-semibold text-sm">{bestMatch.name} ({bestMatch.role})</p>
+            <p className="text-xs text-sky-200 mt-1">
+              {bestMatch.availability} · {bestMatch.location} · {bestMatch.specialties.join(', ')}
             </p>
-            <button className="mt-3 px-4 py-2 bg-advisa-accent text-white rounded-lg text-sm hover:bg-advisa-primary">
+            <button className="mt-3 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors">
               Assign to Referral
             </button>
           </div>

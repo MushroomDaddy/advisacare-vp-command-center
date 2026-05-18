@@ -3,20 +3,25 @@ import type { UserRole } from '../types';
 export interface RouteConfig {
   path: string;
   label: string;
-  icon: string;
+  icon: string;  // Lucide icon name
   roles: UserRole[];
 }
 
+/**
+ * Single source of truth for all route configurations and role-based access.
+ * Used by App.tsx (navigation/routing), Settings.tsx (permission display),
+ * and any other component needing role-based access checks.
+ */
 export const allRoutes: RouteConfig[] = [
-  { path: '/', label: 'Dashboard', icon: '📊', roles: ['VP', 'Intake Coordinator', 'Scheduler', 'Field Staff', 'Compliance Admin'] },
-  { path: '/referrals', label: 'Referrals', icon: '📋', roles: ['VP', 'Intake Coordinator', 'Scheduler'] },
-  { path: '/staffing', label: 'Staffing', icon: '👥', roles: ['VP', 'Scheduler', 'Compliance Admin'] },
-  { path: '/compliance', label: 'Compliance', icon: '✅', roles: ['VP', 'Compliance Admin'] },
-  { path: '/field-assistant', label: 'Field Assistant', icon: '📱', roles: ['VP', 'Scheduler', 'Field Staff'] },
-  { path: '/quality', label: 'Quality', icon: '⭐', roles: ['VP', 'Intake Coordinator'] },
-  { path: '/referral-partners', label: 'Partners', icon: '🤝', roles: ['VP', 'Intake Coordinator'] },
-  { path: '/settings', label: 'Settings', icon: '⚙️', roles: ['VP'] },
-  { path: '/audit-log', label: 'Audit Log', icon: '🔍', roles: ['VP', 'Compliance Admin'] },
+  { path: '/', label: 'Dashboard', icon: 'LayoutDashboard', roles: ['VP', 'Intake Coordinator', 'Scheduler', 'Compliance Admin'] },
+  { path: '/referrals', label: 'Referrals', icon: 'ClipboardList', roles: ['VP', 'Intake Coordinator', 'Scheduler'] },
+  { path: '/staffing', label: 'Staffing', icon: 'Users', roles: ['VP', 'Scheduler'] },
+  { path: '/compliance', label: 'Compliance', icon: 'ShieldCheck', roles: ['VP', 'Compliance Admin'] },
+  { path: '/field-assistant', label: 'Field Assistant', icon: 'Smartphone', roles: ['VP', 'Scheduler', 'Field Staff'] },
+  { path: '/quality', label: 'Quality', icon: 'Star', roles: ['VP', 'Field Staff'] },
+  { path: '/referral-partners', label: 'Partners', icon: 'Handshake', roles: ['VP', 'Intake Coordinator'] },
+  { path: '/settings', label: 'Settings', icon: 'Settings', roles: ['VP', 'Intake Coordinator', 'Scheduler', 'Field Staff', 'Compliance Admin'] },
+  { path: '/audit-log', label: 'Audit Log', icon: 'FileSearch', roles: ['VP', 'Compliance Admin', 'Intake Coordinator'] },
 ];
 
 export function canAccessRoute(path: string, role: UserRole): boolean {
@@ -27,4 +32,8 @@ export function canAccessRoute(path: string, role: UserRole): boolean {
 
 export function getVisibleRoutes(role: UserRole): RouteConfig[] {
   return allRoutes.filter(r => r.roles.includes(role));
+}
+
+export function getPermissionsForRole(role: UserRole): string[] {
+  return allRoutes.filter(r => r.roles.includes(role)).map(r => r.label);
 }

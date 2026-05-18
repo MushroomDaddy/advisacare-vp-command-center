@@ -1,6 +1,7 @@
 import { useAppState } from '../context/AppContext';
 import type { QualityItem } from '../types';
 import { useState } from 'react';
+import { Smartphone, Clock, MapPin, CheckCircle, Save, AlertTriangle, FileText, ChevronRight } from 'lucide-react';
 
 export default function FieldAssistant() {
   const { state, updateVisitChecklist, updateVisitNotes, addIncidentReport, addAuditEntry } = useAppState();
@@ -84,190 +85,126 @@ export default function FieldAssistant() {
   
   return (
     <div>
-      <h2 className="text-2xl font-bold text-advisa-primary mb-6">Field Visit Assistant</h2>
+      <div className="mb-6">
+        <h2 className="page-title flex items-center gap-2">
+          <Smartphone size={22} className="text-advisa-accent" />
+          Field Visit Assistant
+        </h2>
+        <p className="text-xs text-slate-400 mt-1">{state.visits.length} visits today · {completedCount} documented</p>
+      </div>
       
       <div className="max-w-4xl mx-auto">
-        {/* Mobile-style card */}
-        <div className="card border-2 border-advisa-accent">
+        <div className="card border-advisa-accent/30">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold">📱 Today's Route</h3>
+            <p className="section-title">Today's Route</p>
             <div className="flex gap-2">
-              <span className="badge-success">{state.visits.length} Visits</span>
-              <span className="badge-success">{completedCount} Documented</span>
+              <span className="badge badge-info">{state.visits.length} Visits</span>
+              <span className="badge badge-success">{completedCount} Done</span>
             </div>
           </div>
           
-          {/* Visit Cards */}
-          <div className="space-y-3 mb-6">
+          <div className="space-y-2 mb-5">
             {state.visits.map((visit) => (
               <div 
                 key={visit.id} 
-                className={"p-4 border rounded-lg cursor-pointer transition-all " + 
-                  (selectedVisit === visit.id 
-                    ? "border-advisa-accent bg-blue-50 shadow-md" 
-                    : "border-gray-200 hover:bg-gray-50 hover:border-gray-300"
-                  )}
+                className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                  selectedVisit === visit.id
+                    ? 'border-advisa-accent bg-sky-50/50 shadow-card-hover'
+                    : 'border-advisa-border hover:bg-slate-50 hover:border-slate-300'
+                }`}
                 onClick={() => setSelectedVisit(selectedVisit === visit.id ? null : visit.id)}
               >
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <p className="font-medium">{visit.patientInitials}</p>
-                      <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{visit.serviceType}</span>
+                      <p className="font-semibold text-sm text-slate-800">{visit.patientInitials}</p>
+                      <span className="badge badge-neutral">{visit.serviceType}</span>
                     </div>
-                    <p className="text-sm text-gray-500">🕐 {visit.time} • {visit.staffName}</p>
-                    <p className="text-xs text-gray-400 mt-1">📍 {visit.address}</p>
+                    <p className="text-xs text-slate-500 flex items-center gap-1"><Clock size={11} />{visit.time} · {visit.staffName}</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1"><MapPin size={10} />{visit.address}</p>
                   </div>
-                  <div className="text-right">
-                    <span className={
+                  <div className="flex items-center gap-2">
+                    <span className={`badge ${
                       visit.documentationStatus === 'Complete' ? 'badge-success' :
                       visit.documentationStatus === 'Pending' ? 'badge-warning' : 'badge-urgent'
-                    }>
-                      {visit.documentationStatus}
-                    </span>
+                    }`}>{visit.documentationStatus}</span>
+                    <ChevronRight size={14} className={`text-slate-400 transition-transform ${selectedVisit === visit.id ? 'rotate-90' : ''}`} />
                   </div>
                 </div>
                 
-                {/* Progress bar */}
-                <div className="mt-3">
-                  <div className="flex justify-between text-xs text-gray-500 mb-1">
-                    <span>Checklist</span>
+                <div className="mt-2.5">
+                  <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                    <span>Checklist progress</span>
                     <span>{visit.checklist.filter(i => i.completed).length}/{visit.checklist.length}</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-advisa-accent h-2 rounded-full transition-all" 
-                      style={{ width: `${(visit.checklist.filter(i => i.completed).length / visit.checklist.length) * 100}%` }}
-                    ></div>
+                  <div className="w-full bg-slate-100 rounded-full h-1.5">
+                    <div className="bg-advisa-accent h-1.5 rounded-full transition-all" style={{ width: `${(visit.checklist.filter(i => i.completed).length / visit.checklist.length) * 100}%` }} />
                   </div>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Selected Visit Detail */}
           {selectedVisitData && (
-            <div className="border-t pt-4">
-              <h4 className="font-semibold mb-3">Visit Details - {selectedVisitData.patientInitials}</h4>
+            <div className="border-t border-advisa-border pt-4">
+              <p className="section-title mb-3">Visit Detail — {selectedVisitData.patientInitials}</p>
               
-              {/* Checklist */}
               <div className="mb-4">
-                <p className="text-sm font-medium text-gray-700 mb-2">Checklist:</p>
-                <div className="space-y-2">
+                <p className="stat-label mb-2">Checklist</p>
+                <div className="space-y-1">
                   {selectedVisitData.checklist.map((item, idx) => (
-                    <label key={idx} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        checked={item.completed} 
-                        onChange={() => handleChecklistToggle(selectedVisitData.id, idx)}
-                        className="w-5 h-5 rounded border-gray-300 text-advisa-accent focus:ring-advisa-accent"
-                      />
-                      <span className={item.completed ? "line-through text-gray-400" : "text-gray-700"}>
-                        {item.task}
-                      </span>
+                    <label key={idx} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors">
+                      <input type="checkbox" checked={item.completed} onChange={() => handleChecklistToggle(selectedVisitData.id, idx)}
+                        className="w-4 h-4 rounded border-slate-300 text-advisa-accent focus:ring-advisa-accent" />
+                      <span className={`text-sm ${item.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>{item.task}</span>
+                      {item.completed && <CheckCircle size={13} className="text-emerald-500 ml-auto" />}
                     </label>
                   ))}
                 </div>
               </div>
               
-              {/* Supplies Needed */}
               <div className="mb-4">
-                <p className="text-sm font-medium text-gray-700 mb-2">Supplies Needed:</p>
-                <div className="flex flex-wrap gap-2">
-                  {selectedVisitData.suppliesNeeded.map(s => (
-                    <span key={s} className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-medium">
-                      {s}
-                    </span>
-                  ))}
+                <p className="stat-label mb-2">Supplies Needed</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedVisitData.suppliesNeeded.map(s => <span key={s} className="badge badge-neutral">{s}</span>)}
                 </div>
               </div>
 
-              {/* Voice-to-Note */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Voice-to-Note / Notes:</label>
-                <textarea 
-                  className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-advisa-accent focus:outline-none"
-                  rows={4}
-                  placeholder="Record or type your visit notes here..."
-                  value={noteText}
-                  onChange={(e) => setNoteText(e.target.value)}
-                />
-                <button 
-                  onClick={handleSaveNote}
-                  className="mt-2 px-4 py-2 bg-advisa-primary text-white rounded-lg text-sm hover:bg-advisa-secondary"
-                >
-                  💾 Save Note
+                <label className="stat-label mb-2 block">Notes</label>
+                <textarea className="input" rows={3} placeholder="Record or type visit notes..." value={noteText} onChange={(e) => setNoteText(e.target.value)} />
+                <button onClick={handleSaveNote} className="btn-primary mt-2 text-xs"><Save size={13} />Save Note</button>
+              </div>
+
+              <div className="flex gap-2">
+                <button onClick={() => setShowEscalation(!showEscalation)}
+                  className="flex-1 flex items-center justify-center gap-2 bg-red-50 text-red-700 py-2 rounded-lg text-xs font-semibold hover:bg-red-100 transition-colors border border-red-200">
+                  <AlertTriangle size={13} />Escalate
+                </button>
+                <button onClick={() => setShowIncident(!showIncident)}
+                  className="flex-1 flex items-center justify-center gap-2 bg-sky-50 text-sky-700 py-2 rounded-lg text-xs font-semibold hover:bg-sky-100 transition-colors border border-sky-200">
+                  <FileText size={13} />Incident Report
                 </button>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => setShowEscalation(!showEscalation)}
-                  className="flex-1 bg-hipaa-red/10 text-hipaa-red py-2 rounded-lg text-sm font-medium hover:bg-hipaa-red/20 transition-colors"
-                >
-                  🚨 Escalate
-                </button>
-                <button 
-                  onClick={() => setShowIncident(!showIncident)}
-                  className="flex-1 bg-advisa-accent/10 text-advisa-primary py-2 rounded-lg text-sm font-medium hover:bg-advisa-accent/20 transition-colors"
-                >
-                  📋 Incident Report
-                </button>
-              </div>
-
-              {/* Incident Report Form */}
               {showIncident && (
-                <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="font-medium text-advisa-primary mb-2">Incident Report Details:</p>
-                  <textarea 
-                    className="w-full p-3 border border-blue-300 rounded-lg text-sm"
-                    rows={3}
-                    placeholder="Describe the incident..."
-                    value={incidentText}
-                    onChange={(e) => setIncidentText(e.target.value)}
-                  />
+                <div className="mt-3 p-3 bg-sky-50/50 border border-sky-200 rounded-lg">
+                  <p className="text-xs font-semibold text-slate-700 mb-2">Incident Report</p>
+                  <textarea className="input" rows={3} placeholder="Describe the incident..." value={incidentText} onChange={(e) => setIncidentText(e.target.value)} />
                   <div className="flex gap-2 mt-2">
-                    <button 
-                      onClick={handleIncidentReport}
-                      className="px-4 py-2 bg-advisa-accent text-white rounded-lg text-sm"
-                    >
-                      Submit Incident Report
-                    </button>
-                    <button 
-                      onClick={() => { setShowIncident(false); setIncidentText(''); }}
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm"
-                    >
-                      Cancel
-                    </button>
+                    <button onClick={handleIncidentReport} className="btn-primary text-xs">Submit</button>
+                    <button onClick={() => { setShowIncident(false); setIncidentText(''); }} className="btn-secondary text-xs">Cancel</button>
                   </div>
                 </div>
               )}
 
-              {/* Escalation Form */}
               {showEscalation && (
-                <div className="mt-4 p-4 bg-hipaa-red/5 border border-hipaa-red/20 rounded-lg">
-                  <p className="font-medium text-hipaa-red mb-2">Escalation Details:</p>
-                  <textarea 
-                    className="w-full p-3 border border-hipaa-red/30 rounded-lg text-sm"
-                    rows={3}
-                    placeholder="Describe the issue that needs escalation..."
-                    value={escalationText}
-                    onChange={(e) => setEscalationText(e.target.value)}
-                  />
+                <div className="mt-3 p-3 bg-red-50/50 border border-red-200 rounded-lg">
+                  <p className="text-xs font-semibold text-red-700 mb-2">Escalation</p>
+                  <textarea className="input border-red-200" rows={3} placeholder="Describe the issue..." value={escalationText} onChange={(e) => setEscalationText(e.target.value)} />
                   <div className="flex gap-2 mt-2">
-                    <button 
-                      onClick={handleEscalation}
-                      className="px-4 py-2 bg-hipaa-red text-white rounded-lg text-sm"
-                    >
-                      Submit Escalation
-                    </button>
-                    <button 
-                      onClick={() => { setShowEscalation(false); setEscalationText(''); }}
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm"
-                    >
-                      Cancel
-                    </button>
+                    <button onClick={handleEscalation} className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors">Submit</button>
+                    <button onClick={() => { setShowEscalation(false); setEscalationText(''); }} className="btn-secondary text-xs">Cancel</button>
                   </div>
                 </div>
               )}

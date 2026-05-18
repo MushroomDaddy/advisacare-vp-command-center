@@ -2,21 +2,97 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: 'Inter', sans-serif;
+@layer base {
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: #f1f5f9;
+    color: #1e293b;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 }
 
 @layer components {
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6;
+    @apply bg-white rounded-card shadow-card border border-advisa-border p-5;
+    transition: box-shadow 0.2s ease, transform 0.15s ease;
+  }
+  .card:hover {
+    @apply shadow-card-hover;
+  }
+
+  .card-header {
+    @apply text-sm font-semibold text-slate-700 tracking-tight flex items-center gap-2 mb-4;
+  }
+  .card-header svg {
+    @apply w-4 h-4 text-advisa-accent;
+  }
+
+  .stat-card {
+    @apply bg-white rounded-card shadow-card border border-advisa-border p-4;
+    transition: box-shadow 0.2s ease, transform 0.15s ease;
+  }
+  .stat-card:hover {
+    @apply shadow-card-hover;
+    transform: translateY(-1px);
+  }
+  .stat-label {
+    @apply text-xs font-medium text-slate-500 uppercase tracking-wider;
+  }
+  .stat-value {
+    @apply text-2xl font-bold mt-1 tabular-nums;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold tracking-wide;
   }
   .badge-urgent {
-    @apply bg-hipaa-red/10 text-hipaa-red px-2 py-1 rounded-full text-xs font-medium;
+    @apply bg-red-50 text-red-700 ring-1 ring-inset ring-red-200;
   }
   .badge-warning {
-    @apply bg-hipaa-yellow/10 text-hipaa-yellow px-2 py-1 rounded-full text-xs font-medium;
+    @apply bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200;
   }
   .badge-success {
-    @apply bg-hipaa-green/10 text-hipaa-green px-2 py-1 rounded-full text-xs font-medium;
+    @apply bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200;
+  }
+  .badge-info {
+    @apply bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200;
+  }
+  .badge-neutral {
+    @apply bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-advisa-accent text-white text-sm font-medium rounded-lg hover:bg-advisa-accent-dark transition-colors shadow-sm;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-white text-slate-700 text-sm font-medium rounded-lg border border-advisa-border hover:bg-slate-50 transition-colors;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 text-sm bg-white border border-advisa-border rounded-lg focus:outline-none focus:ring-2 focus:ring-advisa-accent/30 focus:border-advisa-accent transition-shadow;
+  }
+  .select {
+    @apply px-3 py-2 text-sm bg-white border border-advisa-border rounded-lg focus:outline-none focus:ring-2 focus:ring-advisa-accent/30 focus:border-advisa-accent transition-shadow appearance-none cursor-pointer;
+  }
+
+  .table-head {
+    @apply text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-50/80 px-4 py-3 text-left;
+  }
+  .table-cell {
+    @apply px-4 py-3 text-sm text-slate-700 border-t border-slate-100;
+  }
+
+  .page-title {
+    @apply text-xl font-bold text-slate-800 tracking-tight;
+  }
+  .section-title {
+    @apply text-sm font-semibold text-slate-700 tracking-tight;
   }
 }
