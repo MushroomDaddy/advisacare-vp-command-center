@@ -1,4 +1,5 @@
 import { useAppState } from '../context/AppContext';
+import type { QualityStatus } from '../types';
 import { useState } from 'react';
 
 export default function Quality() {
@@ -24,7 +25,7 @@ export default function Quality() {
   };
 
   const handleStatusChange = (id: string, newStatus: string) => {
-    updateQualityStatus(id, newStatus as any);
+    updateQualityStatus(id, newStatus as QualityStatus);
     const item = state.quality.find(q => q.id === id);
     addAuditEntry({
       user: state.currentUser.name,
@@ -99,7 +100,7 @@ export default function Quality() {
           <thead>
             <tr className="border-b border-gray-100">
               <th className="text-left py-3 px-2">Type</th>
-              <th className="text-left py-3 px-2">Patient</th>
+              <th className="text-left py-3 px-2">Patient Initials</th>
               <th className="text-left py-3 px-2">Priority</th>
               <th className="text-left py-3 px-2">Due Date</th>
               <th className="text-left py-3 px-2">Assigned To</th>

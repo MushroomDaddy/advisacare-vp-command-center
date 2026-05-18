@@ -1,12 +1,19 @@
 import { useAppState } from '../context/AppContext';
+import type { Referral, ReferralStage } from '../types';
 import { useState } from 'react';
 
 export default function Referrals() {
-  const { state, updateReferralStage, addAuditEntry } = useAppState();
+  const { state, updateReferralStage, addAuditEntry, addReferral } = useAppState();
   const [selectedReferral, setSelectedReferral] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
   const [stageFilter, setStageFilter] = useState('All Stages');
   const [showNewForm, setShowNewForm] = useState(false);
+  
+  // New Referral form state
+  const [newPatientInitials, setNewPatientInitials] = useState('');
+  const [newServiceType, setNewServiceType] = useState<Referral['serviceType']>('Home Health');
+  const [newUrgency, setNewUrgency] = useState<Referral['urgency']>('Routine');
+  const [newFacility, setNewFacility] = useState('');
 
   const filtered = state.referrals.filter((r) => {
     const matchesText = r.patientInitials.toLowerCase().includes(filter.toLowerCase()) ||
@@ -18,7 +25,7 @@ export default function Referrals() {
   const stages = ['All Stages', 'New', 'Missing Docs', 'Eligibility', 'Staffing', 'Scheduled', 'Started', 'Declined'];
 
   const handleStageChange = (id: string, newStage: string) => {
-    updateReferralStage(id, newStage as any);
+    updateReferralStage(id, newStage as ReferralStage);
     const r = state.referrals.find(ref => ref.id === id);
     addAuditEntry({
       user: state.currentUser.name,
@@ -30,11 +37,47 @@ export default function Referrals() {
     });
   };
 
-  const getAISummary = (referral: typeof state.referrals[0]) => {
+  const handleNewReferral = () => {
+    const newReferral: Referral = {
+      id: `ref_${Date.now()}`,
+      source: 'Manual Entry',
+      patientInitials: newPatientInitials || 'J.D.',
+      serviceType: newServiceType,
+      urgency: newUrgency,
+      dischargeFacility: newFacility || 'Demo Hospital',
+      dischargeDate: new Date().toISOString().split('T')[0],
+      physicianOrders: 'Pending',
+      insuranceStatus: 'Pending',
+      documentsUploaded: 0,
+      assignedCoordinator: state.currentUser.name,
+      stage: 'New',
+      missingItems: ['Physician Orders', 'Discharge Summary', 'Insurance Card'],
+      createdAt: new Date().toISOString(),
+    };
+    
+    addReferral(newReferral);
+    addAuditEntry({
+      user: state.currentUser.name,
+      role: state.currentUser.role,
+      action: 'Created',
+      recordType: 'Referral',
+      recordId: newReferral.id,
+      details: `New referral ${newReferral.patientInitials} from ${newReferral.source}`,
+    });
+    
+    // Reset form
+    setNewPatientInitials('');
+    setNewServiceType('Home Health');
+    setNewUrgency('Routine');
+    setNewFacility('');
+    setShowNewForm(false);
+  };
+
+  const getAISummary = (referral: Referral) => {
     const missing = referral.missingItems.length > 0 ? referral.missingItems.join(', ') : 'None';
-    let action = '';
     let followUp = referral.assignedCoordinator;
     
+    let action: string;
     if (referral.stage === 'Missing Docs') {
       action = `Request missing documents (${missing}) from ${referral.dischargeFacility}`;
     } else if (referral.stage === 'Eligibility') {
@@ -76,25 +119,44 @@ export default function Referrals() {
         <div className="card mb-6 bg-blue-50 border-blue-200">
           <h3 className="font-semibold mb-4">New Referral Form</h3>
           <div className="grid grid-cols-2 gap-4">
-            <input placeholder="Patient Initials (e.g. J.D.)" className="px-3 py-2 border rounded-lg text-sm" />
-            <select className="px-3 py-2 border rounded-lg text-sm">
-              <option>Select Service Type</option>
+            <input 
+              placeholder="Patient Initials (e.g. J.D.)" 
+              className="px-3 py-2 border rounded-lg text-sm"
+              value={newPatientInitials}
+              onChange={(e) => setNewPatientInitials(e.target.value)}
+            />
+            <select 
+              className="px-3 py-2 border rounded-lg text-sm"
+              value={newServiceType}
+              onChange={(e) => setNewServiceType(e.target.value as Referral['serviceType'])}
+            >
               <option>Home Health</option>
               <option>Hospice</option>
               <option>Personal Care</option>
               <option>Therapy</option>
               <option>Catastrophic Injury Care</option>
             </select>
-            <select className="px-3 py-2 border rounded-lg text-sm">
-              <option>Select Urgency</option>
+            <select 
+              className="px-3 py-2 border rounded-lg text-sm"
+              value={newUrgency}
+              onChange={(e) => setNewUrgency(e.target.value as Referral['urgency'])}
+            >
               <option>Routine</option>
               <option>Urgent 24-48 hours</option>
               <option>Immediate</option>
             </select>
-            <input placeholder="Discharge Facility" className="px-3 py-2 border rounded-lg text-sm" />
+            <input 
+              placeholder="Discharge Facility" 
+              className="px-3 py-2 border rounded-lg text-sm"
+              value={newFacility}
+              onChange={(e) => setNewFacility(e.target.value)}
+            />
           </div>
-          <button className="mt-4 px-4 py-2 bg-advisa-accent text-white rounded-lg text-sm">
-            Submit Referral
+          <button 
+            className="mt-4 px-4 py-2 bg-advisa-accent text-white rounded-lg text-sm hover:bg-advisa-primary"
+            onClick={handleNewReferral}
+          >
+            Submit Referral (Demo Data)
           </button>
         </div>
       )}
@@ -121,7 +183,7 @@ export default function Referrals() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
-                <th className="text-left py-3 px-2">Patient</th>
+                <th className="text-left py-3 px-2">Patient Initials</th>
                 <th className="text-left py-3 px-2">Service</th>
                 <th className="text-left py-3 px-2">Urgency</th>
                 <th className="text-left py-3 px-2">Source</th>

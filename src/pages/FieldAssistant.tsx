@@ -1,12 +1,15 @@
 import { useAppState } from '../context/AppContext';
+import type { QualityItem } from '../types';
 import { useState } from 'react';
 
 export default function FieldAssistant() {
-  const { state, updateVisitChecklist, addAuditEntry } = useAppState();
+  const { state, updateVisitChecklist, updateVisitNotes, addIncidentReport, addAuditEntry } = useAppState();
   const [selectedVisit, setSelectedVisit] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
   const [showEscalation, setShowEscalation] = useState(false);
   const [escalationText, setEscalationText] = useState('');
+  const [showIncident, setShowIncident] = useState(false);
+  const [incidentText, setIncidentText] = useState('');
   
   const selectedVisitData = state.visits.find(v => v.id === selectedVisit);
   
@@ -25,11 +28,12 @@ export default function FieldAssistant() {
 
   const handleSaveNote = () => {
     if (!selectedVisit || !noteText.trim()) return;
+    updateVisitNotes(selectedVisit, noteText);
     addAuditEntry({
       user: state.currentUser.name,
       role: state.currentUser.role,
       action: 'Updated',
-      recordType: 'Quality',
+      recordType: 'Visit',
       recordId: selectedVisit,
       details: `Voice note added for ${selectedVisitData?.patientInitials}`,
     });
@@ -50,6 +54,30 @@ export default function FieldAssistant() {
     setEscalationText('');
     setShowEscalation(false);
     alert('Escalation submitted!');
+  };
+
+  const handleIncidentReport = () => {
+    if (!incidentText.trim() || !selectedVisitData) return;
+    const incident: Omit<QualityItem, 'id'> = {
+      type: 'Missed Visit',
+      patientInitials: selectedVisitData.patientInitials,
+      dueDate: new Date().toISOString().split('T')[0],
+      status: 'Open',
+      priority: 'High',
+      assignedTo: state.currentUser.name,
+    };
+    addIncidentReport(incident);
+    addAuditEntry({
+      user: state.currentUser.name,
+      role: state.currentUser.role,
+      action: 'Created',
+      recordType: 'Quality',
+      recordId: selectedVisit || 'N/A',
+      details: `INCIDENT REPORT: ${incidentText}`,
+    });
+    setIncidentText('');
+    setShowIncident(false);
+    alert('Incident report submitted to Quality team!');
   };
 
   const completedCount = state.visits.filter(v => v.documentationStatus === 'Complete').length;
@@ -180,10 +208,41 @@ export default function FieldAssistant() {
                 >
                   🚨 Escalate
                 </button>
-                <button className="flex-1 bg-advisa-accent/10 text-advisa-primary py-2 rounded-lg text-sm font-medium hover:bg-advisa-accent/20 transition-colors">
+                <button 
+                  onClick={() => setShowIncident(!showIncident)}
+                  className="flex-1 bg-advisa-accent/10 text-advisa-primary py-2 rounded-lg text-sm font-medium hover:bg-advisa-accent/20 transition-colors"
+                >
                   📋 Incident Report
                 </button>
               </div>
+
+              {/* Incident Report Form */}
+              {showIncident && (
+                <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="font-medium text-advisa-primary mb-2">Incident Report Details:</p>
+                  <textarea 
+                    className="w-full p-3 border border-blue-300 rounded-lg text-sm"
+                    rows={3}
+                    placeholder="Describe the incident..."
+                    value={incidentText}
+                    onChange={(e) => setIncidentText(e.target.value)}
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <button 
+                      onClick={handleIncidentReport}
+                      className="px-4 py-2 bg-advisa-accent text-white rounded-lg text-sm"
+                    >
+                      Submit Incident Report
+                    </button>
+                    <button 
+                      onClick={() => { setShowIncident(false); setIncidentText(''); }}
+                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Escalation Form */}
               {showEscalation && (

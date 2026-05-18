@@ -2,7 +2,7 @@ import { useAppState } from '../context/AppContext';
 import { useState } from 'react';
 
 export default function Compliance() {
-  const { state, addAuditEntry } = useAppState();
+  const { state, updateComplianceItem, getComplianceStatus, addAuditEntry } = useAppState();
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterType, setFilterType] = useState('All');
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null);
@@ -25,16 +25,25 @@ export default function Compliance() {
   };
 
   const handleRenew = (itemId: string) => {
-    // In real app, would update the item
     const item = state.compliance.find(c => c.id === itemId);
+    const newExpiry = new Date();
+    newExpiry.setFullYear(newExpiry.getFullYear() + 1);
+    
+    updateComplianceItem(itemId, {
+      status: 'Compliant',
+      expiryDate: newExpiry.toISOString().split('T')[0],
+      lastCompleted: new Date().toISOString().split('T')[0],
+    });
+    
     addAuditEntry({
       user: state.currentUser.name,
       role: state.currentUser.role,
       action: 'Updated',
       recordType: 'Compliance',
       recordId: itemId,
-      details: `Renewal initiated for ${item?.staffName} - ${item?.itemType}`,
+      details: `Renewal completed for ${item?.staffName} - ${item?.itemType}, new expiry: ${newExpiry.toISOString().split('T')[0]}`,
     });
+    alert('Compliance item renewed successfully!');
   };
 
   return (
@@ -103,41 +112,41 @@ export default function Compliance() {
               <th className="text-left py-3 px-2">Actions</th>
             </tr>
           </thead>
-          <tbody>
-            {filtered.map((item) => (
-              <tr key={item.id} className="border-b border-gray-50 hover:bg-gray-50">
-                <td className="py-3 px-2 font-medium">{item.staffName}</td>
-                <td className="py-3 px-2">{item.itemType}</td>
-                <td className="py-3 px-2">
-                  <span className={getStatusBadge(item.status)}>
-                    {item.status}
-                  </span>
-                </td>
-                <td className="py-3 px-2">
-                  <span className={item.status === 'Expired' ? 'text-hipaa-red font-medium' : 'text-gray-600'}>
-                    {item.expiryDate}
-                  </span>
-                </td>
-                <td className="py-3 px-2 text-gray-500">{item.lastCompleted}</td>
-                <td className="py-3 px-2">
-                  {item.status !== 'Compliant' && (
-                    <button 
-                      onClick={() => handleRenew(item.id)}
-                      className="text-xs px-3 py-1 bg-advisa-accent text-white rounded hover:bg-advisa-primary"
-                    >
-                      Renew
-                    </button>
-                  )}
-                  <button 
-                    onClick={() => setSelectedStaff(selectedStaff === item.staffId ? null : item.staffId)}
-                    className="text-xs text-advisa-accent hover:underline ml-2"
-                  >
-                    {selectedStaff === item.staffId ? 'Hide' : 'Details'}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
+              <tbody>
+                {filtered.map((item) => (
+                  <tr key={item.id} className="border-b border-gray-50 hover:bg-gray-50">
+                    <td className="py-3 px-2 font-medium">{item.staffName}</td>
+                    <td className="py-3 px-2">{item.itemType}</td>
+                    <td className="py-3 px-2">
+                      <span className={getStatusBadge(getComplianceStatus(item))}>
+                        {getComplianceStatus(item)}
+                      </span>
+                    </td>
+                    <td className="py-3 px-2">
+                      <span className={getComplianceStatus(item) === 'Expired' ? 'text-hipaa-red font-medium' : 'text-gray-600'}>
+                        {item.expiryDate}
+                      </span>
+                    </td>
+                    <td className="py-3 px-2 text-gray-500">{item.lastCompleted}</td>
+                    <td className="py-3 px-2">
+                      {getComplianceStatus(item) !== 'Compliant' && (
+                        <button 
+                          onClick={() => handleRenew(item.id)}
+                          className="text-xs px-3 py-1 bg-advisa-accent text-white rounded hover:bg-advisa-primary"
+                        >
+                          Renew
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => setSelectedStaff(selectedStaff === item.staffId ? null : item.staffId)}
+                        className="text-xs text-advisa-accent hover:underline ml-2"
+                      >
+                        {selectedStaff === item.staffId ? 'Hide' : 'Details'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
         </table>
       </div>
 
@@ -155,7 +164,7 @@ export default function Compliance() {
                   {staffItems.map(item => (
                     <div key={item.id} className="flex justify-between items-center text-sm">
                       <span>{item.itemType}</span>
-                      <span className={getStatusBadge(item.status)}>{item.status}</span>
+                      <span className={getStatusBadge(getComplianceStatus(item))}>{getComplianceStatus(item)}</span>
                     </div>
                   ))}
                 </div>

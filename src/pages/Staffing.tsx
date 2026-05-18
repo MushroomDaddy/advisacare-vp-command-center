@@ -1,5 +1,5 @@
 import { useAppState } from '../context/AppContext';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 export default function Staffing() {
   const { state, addAuditEntry } = useAppState();
@@ -15,8 +15,16 @@ export default function Staffing() {
     (filterAvailability === 'All' || s.availability === filterAvailability)
   );
 
+  const cprThreshold = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    return d;
+  }, []);
+
   const todayVisits = state.staff.reduce((sum, s) => sum + s.todayVisits, 0);
-  const openShifts = 7;
+  const openShifts = state.staff
+    .filter(s => s.availability !== 'Available')
+    .reduce((sum, s) => sum + Math.max(0, 5 - s.todayVisits), 0);
   const highRiskUncovered = state.staff.filter(s => s.overtimeRisk === 'High').length;
 
   const getBestMatch = () => {
@@ -145,7 +153,7 @@ export default function Staffing() {
                 <td className="py-3 px-2 text-gray-600">{staff.location}</td>
                 <td className="py-3 px-2">
                   <span className={
-                    new Date(staff.cprExpiry) < new Date(Date.now() + 30*24*60*60*1000) 
+                    new Date(staff.cprExpiry) < cprThreshold
                       ? 'text-hipaa-red font-medium' 
                       : 'text-gray-600'
                   }>

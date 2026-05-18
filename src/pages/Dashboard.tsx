@@ -1,8 +1,22 @@
 import { useAppState } from '../context/AppContext';
+import { exportToCSV } from '../lib/csvUtils';
 import { useMemo } from 'react';
 
 export default function Dashboard() {
-  const { state } = useAppState();
+  const { state, getComplianceStatus } = useAppState();
+  
+  const handleExport = () => {
+    const columns = ['Patient Initials', 'Service Type', 'Urgency', 'Source', 'Stage', 'Insurance Status'];
+    const data = state.referrals.map(r => ({
+      'Patient Initials': r.patientInitials,
+      'Service Type': r.serviceType,
+      'Urgency': r.urgency,
+      'Source': r.source,
+      'Stage': r.stage,
+      'Insurance Status': r.insuranceStatus,
+    }));
+    exportToCSV(columns, data, 'advisacare-referrals.csv');
+  };
   
   const stats = useMemo(() => {
     const newReferrals = state.referrals.filter(r => {
@@ -16,22 +30,22 @@ export default function Dashboard() {
     const missingDocs = state.referrals.filter(r => r.stage === 'Missing Docs').length;
     const openShifts = state.staff.filter(s => s.availability === 'Available').length;
     const highRisk = state.staff.filter(s => s.overtimeRisk === 'High').length;
-    const expired = state.compliance.filter(c => c.status === 'Expired').length;
-    const dueSoon = state.compliance.filter(c => c.status === 'Due Soon').length;
+    const expired = state.compliance.filter(c => getComplianceStatus(c) === 'Expired').length;
+    const dueSoon = state.compliance.filter(c => getComplianceStatus(c) === 'Expiring').length;
     const pendingQA = state.quality.filter(q => q.status === 'Open').length;
     const openSOC = state.referrals.filter(r => r.stage === 'Scheduled' || r.stage === 'Started').length;
     
     return { newReferrals, urgentReferrals, missingDocs, openShifts, highRisk, expired, dueSoon, pendingQA, openSOC };
-  }, [state]);
+  }, [state, getComplianceStatus]);
 
-  const urgentActivities = useMemo(() => {
+   const urgentActivities = useMemo(() => {
     const activities: { text: string; type: string }[] = [];
     
     state.referrals.filter(r => r.urgency === 'Immediate').forEach(r => {
       activities.push({ text: `Referral ${r.patientInitials} (${r.serviceType}) - IMMEDIATE urgency`, type: 'urgent' });
     });
     
-    state.compliance.filter(c => c.status === 'Expired').forEach(c => {
+    state.compliance.filter(c => getComplianceStatus(c) === 'Expired').forEach(c => {
       activities.push({ text: `License expired for ${c.staffName} (${c.itemType})`, type: 'urgent' });
     });
     
@@ -40,11 +54,19 @@ export default function Dashboard() {
     });
     
     return activities.slice(0, 5);
-  }, [state]);
+  }, [state, getComplianceStatus]);
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-advisa-primary mb-6">Executive Morning Brief</h2>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold text-advisa-primary">Executive Morning Brief</h2>
+        <button 
+          onClick={handleExport}
+          className="px-4 py-2 bg-advisa-primary text-white rounded-lg text-sm hover:bg-advisa-secondary"
+        >
+          📊 Export Report (CSV)
+        </button>
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
         {[

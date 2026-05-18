@@ -5,6 +5,7 @@ const roles = [
   { 
     id: 'vp', 
     name: 'VP', 
+    roleKey: 'VP' as const,
     description: 'Full access to all modules and executive dashboard', 
     color: 'bg-purple-100 text-purple-700 border-purple-300',
     permissions: ['Dashboard', 'Referrals', 'Staffing', 'Compliance', 'Field Assistant', 'Quality', 'Partners', 'Settings', 'Audit Log'],
@@ -12,6 +13,7 @@ const roles = [
   { 
     id: 'intake', 
     name: 'Intake Coordinator', 
+    roleKey: 'Intake Coordinator' as const,
     description: 'Manage referrals, documents, eligibility, and partner relations', 
     color: 'bg-blue-100 text-blue-700 border-blue-300',
     permissions: ['Referrals', 'Partners'],
@@ -19,6 +21,7 @@ const roles = [
   { 
     id: 'scheduler', 
     name: 'Scheduler', 
+    roleKey: 'Scheduler' as const,
     description: 'View staffing, assign visits, manage schedules and field operations', 
     color: 'bg-green-100 text-green-700 border-green-300',
     permissions: ['Staffing', 'Field Assistant'],
@@ -26,6 +29,7 @@ const roles = [
   { 
     id: 'field', 
     name: 'Field Staff', 
+    roleKey: 'Field Staff' as const,
     description: 'View assigned visits, complete checklists, voice notes, and escalations', 
     color: 'bg-orange-100 text-orange-700 border-orange-300',
     permissions: ['Field Assistant'],
@@ -33,6 +37,7 @@ const roles = [
   { 
     id: 'compliance', 
     name: 'Compliance Admin', 
+    roleKey: 'Compliance Admin' as const,
     description: 'Track licenses, training, certifications, and compliance audits', 
     color: 'bg-red-100 text-red-700 border-red-300',
     permissions: ['Compliance', 'Audit Log'],
@@ -42,27 +47,33 @@ const roles = [
 const allPages = ['Dashboard', 'Referrals', 'Staffing', 'Compliance', 'Field Assistant', 'Quality', 'Partners', 'Settings', 'Audit Log'];
 
 export default function Settings() {
-  const { state, addAuditEntry } = useAppState();
+  const { state, addAuditEntry, setCurrentRole } = useAppState();
   const [selectedRole, setSelectedRole] = useState(roles[0]);
   const [showRoleChange, setShowRoleChange] = useState(false);
   
   const handleRoleChange = (newRole: typeof roles[0]) => {
-    // In real app, would update user context/backend
+    // Update the current role in context
+    setCurrentRole(newRole.roleKey);
+    
     addAuditEntry({
       user: state.currentUser.name,
       role: state.currentUser.role,
       action: 'Updated',
       recordType: 'Staff',
       recordId: 'user-' + Date.now(),
-      details: `Role changed to ${newRole.name} (simulated)`,
+      details: `Role changed to ${newRole.name}`,
     });
     setShowRoleChange(false);
-    alert(`Role switched to ${newRole.name} (simulated - refresh to apply in real app)`);
   };
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-advisa-primary mb-6">Settings / Role-Based Access</h2>
+      <div className="flex items-center gap-3 mb-6">
+        <h2 className="text-2xl font-bold text-advisa-primary">Settings / Role-Based Access</h2>
+        <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded-full border border-gray-300">
+          role-based access mockup
+        </span>
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Role List */}
