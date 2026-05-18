@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6;
+  }
+  .badge-urgent {
+    @apply bg-hipaa-red/10 text-hipaa-red px-2 py-1 rounded-full text-xs font-medium;
+  }
+  .badge-warning {
+    @apply bg-hipaa-yellow/10 text-hipaa-yellow px-2 py-1 rounded-full text-xs font-medium;
+  }
+  .badge-success {
+    @apply bg-hipaa-green/10 text-hipaa-green px-2 py-1 rounded-full text-xs font-medium;
+  }
+}
