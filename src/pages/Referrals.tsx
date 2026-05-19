@@ -1,5 +1,6 @@
 import { useAppState } from '../context/AppContext';
 import { useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getDaysUntilExpiry, formatDate } from '../lib/dateUtils';
 import { findDuplicateReferrals, getSLACategory, getSLALabel, calculateReadiness, getRecommendedNextAction, getStageAgingHours, getReferralToSOCDays, calculatePipelineAnalytics } from '../utils/dataLogic';
 import type { Referral, ReferralDocument } from '../types';
@@ -261,10 +262,12 @@ function DetailDrawer({ referralId, onClose, onUpload, onMoveStage }: {
 
 export default function Referrals() {
   const { state, updateReferralStage, updateReferral, addAuditEntry, addToast } = useAppState();
+  const [searchParams] = useSearchParams();
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
   const [filterStage, setFilterStage] = useState('All');
   const [filterUrgency, setFilterUrgency] = useState('All');
-  const [selectedReferralId, setSelectedReferralId] = useState<string | null>(null);
+  // Deep-link: open referral from query param ?ref=REF-001
+  const [selectedReferralId, setSelectedReferralId] = useState<string | null>(() => searchParams.get('ref'));
   const [showAnalytics, setShowAnalytics] = useState(false);
 
   const urgencies = ['All', 'Routine', 'Urgent 24-48 hours', 'Immediate'];

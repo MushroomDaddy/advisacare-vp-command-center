@@ -1,11 +1,12 @@
 import { useAppState } from '../context/AppContext';
 import { useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { findBestMatchStaff, hasWorkRestriction, serviceToStaffRoles } from '../utils/dataLogic';
-import type { Referral, StaffMember } from '../types';
+import type { Referral, StaffMember, ShiftBoardEntry } from '../types';
 import {
   Users, UserCheck, Clock, Shield,
   ChevronDown, ChevronUp, Tag,
-  ArrowRight
+  ArrowRight, CalendarClock, Check, XCircle, Send
 } from 'lucide-react';
 
 function StaffCard({ staff, compliance }: { staff: StaffMember; compliance: ReturnType<typeof useAppState>['state']['compliance'] }) {
@@ -213,9 +214,165 @@ function MatchPanel({ referral, staff, compliance }: {
   );
 }
 
+// --- Open Shift Board ---
+const shiftStatusColors: Record<ShiftBoardEntry['status'], string> = {
+  Open: 'badge-warning',
+  Offered: 'badge-info',
+  Accepted: 'badge-success',
+  Declined: 'badge-urgent',
+};
+
+function ShiftBoard() {
+  const { state, updateShiftBoard, addVisit, addAuditEntry, addToast } = useAppState();
+  const [filterStatus, setFilterStatus] = useState<ShiftBoardEntry['status'] | 'All'>('All');
+
+  const shifts = filterStatus === 'All' ? state.shiftBoard : state.shiftBoard.filter(s => s.status === filterStatus);
+
+  const handleOfferShift = (shift: ShiftBoardEntry, staffName: string) => {
+    updateShiftBoard(shift.id, { status: 'Offered', offeredTo: staffName, offeredAt: new Date().toISOString() });
+    addAuditEntry({
+      user: state.currentUser.name, role: state.currentUser.role,
+      action: 'Updated', recordType: 'ShiftBoard', recordId: shift.id,
+      details: `Offered shift to ${staffName}`, before: 'Open', after: 'Offered',
+    });
+    addToast(`Shift offered to ${staffName}`, 'success');
+  };
+
+  const handleAcceptShift = (shift: ShiftBoardEntry) => {
+    updateShiftBoard(shift.id, { status: 'Accepted' });
+    // Create a visit record
+    addVisit({
+      id: `VIS-SHIFT-${shift.id}`,
+      patientInitials: shift.patientInitials,
+      address: 'TBD',
+      time: shift.deadline,
+      serviceType: shift.serviceType,
+      visitStatus: 'Scheduled',
+      staffName: shift.offeredTo || state.currentUser.name,
+      acuity: shift.acuity,
+      checklist: [
+        { task: 'Verify patient identity', completed: false },
+        { task: 'Complete assessment', completed: false },
+        { task: 'Document visit', completed: false },
+      ],
+      evv: { clockIn: null, clockOut: null, gpsLatitude: null, gpsLongitude: null, gpsAddress: '', syncStatus: 'Pending', patientSignature: false, caregiverSignature: false },
+      suppliesNeeded: [],
+      notes: `Shift board assignment: ${shift.id}`,
+      evvExceptions: [],
+    });
+    addAuditEntry({
+      user: state.currentUser.name, role: state.currentUser.role,
+      action: 'Updated', recordType: 'ShiftBoard', recordId: shift.id,
+      details: `Shift accepted by ${shift.offeredTo || state.currentUser.name}. Visit created.`,
+      before: 'Offered', after: 'Accepted',
+    });
+    addToast(`Shift accepted — visit created`, 'success');
+  };
+
+  const handleDeclineShift = (shift: ShiftBoardEntry) => {
+    updateShiftBoard(shift.id, { status: 'Declined' });
+    addAuditEntry({
+      user: state.currentUser.name, role: state.currentUser.role,
+      action: 'Updated', recordType: 'ShiftBoard', recordId: shift.id,
+      details: `Shift declined by ${shift.offeredTo || 'unknown'}`, before: shift.status, after: 'Declined',
+    });
+    addToast('Shift declined', 'warning');
+  };
+
+  if (state.shiftBoard.length === 0) return null;
+
+  return (
+    <div className="card mb-5" data-testid="shift-board">
+      <div className="card-header mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2 text-slate-800">
+          <CalendarClock size={15} className="text-advisa-accent" /> Open Shift Board ({state.shiftBoard.length})
+        </div>
+        <select className="select text-xs py-1" value={filterStatus} onChange={e => setFilterStatus(e.target.value as ShiftBoardEntry['status'] | 'All')}>
+          <option value="All">All Statuses</option>
+          <option value="Open">Open</option>
+          <option value="Offered">Offered</option>
+          <option value="Accepted">Accepted</option>
+          <option value="Declined">Declined</option>
+        </select>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-slate-500 border-b">
+              <th className="text-left py-2 px-2 font-medium">Patient</th>
+              <th className="text-left py-2 px-2 font-medium">Service</th>
+              <th className="text-left py-2 px-2 font-medium">Acuity</th>
+              <th className="text-left py-2 px-2 font-medium">Needed Role</th>
+              <th className="text-left py-2 px-2 font-medium">Deadline</th>
+              <th className="text-left py-2 px-2 font-medium">Status</th>
+              <th className="text-left py-2 px-2 font-medium">Offered To</th>
+              <th className="text-right py-2 px-2 font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shifts.map(shift => (
+              <tr key={shift.id} className="border-b border-advisa-border/50 hover:bg-slate-50" data-testid="shift-row">
+                <td className="py-2 px-2 font-semibold">{shift.patientInitials}</td>
+                <td className="py-2 px-2">{shift.serviceType}</td>
+                <td className="py-2 px-2">
+                  <span className={`badge text-[8px] ${shift.acuity === 'High' ? 'badge-urgent' : shift.acuity === 'Medium' ? 'badge-warning' : 'badge-neutral'}`}>
+                    {shift.acuity}
+                  </span>
+                </td>
+                <td className="py-2 px-2">{shift.neededRole}</td>
+                <td className="py-2 px-2">{shift.deadline}</td>
+                <td className="py-2 px-2"><span className={`badge text-[8px] ${shiftStatusColors[shift.status]}`}>{shift.status}</span></td>
+                <td className="py-2 px-2">{shift.offeredTo || '—'}</td>
+                <td className="py-2 px-2 text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    {shift.status === 'Open' && (
+                      <button
+                        onClick={() => {
+                          const available = state.staff.filter(s => s.availability !== 'Unavailable');
+                          if (available.length > 0) handleOfferShift(shift, available[0].name);
+                          else addToast('No available staff to offer', 'warning');
+                        }}
+                        className="btn-primary text-[9px] py-0.5 px-1.5"
+                        data-testid="offer-shift-btn"
+                      >
+                        <Send size={8} /> Offer
+                      </button>
+                    )}
+                    {shift.status === 'Offered' && (
+                      <>
+                        <button onClick={() => handleAcceptShift(shift)} className="btn-primary text-[9px] py-0.5 px-1.5" data-testid="accept-shift-btn">
+                          <Check size={8} /> Accept
+                        </button>
+                        <button onClick={() => handleDeclineShift(shift)} className="btn-secondary text-[9px] py-0.5 px-1.5">
+                          <XCircle size={8} /> Decline
+                        </button>
+                      </>
+                    )}
+                    {shift.status === 'Accepted' && <span className="text-emerald-600 text-[9px]">✓ Filled</span>}
+                    {shift.status === 'Declined' && (
+                      <button
+                        onClick={() => updateShiftBoard(shift.id, { status: 'Open', offeredTo: undefined, offeredAt: undefined })}
+                        className="btn-secondary text-[9px] py-0.5 px-1.5"
+                      >
+                        Re-open
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function Staffing() {
   const { state } = useAppState();
-  const [selectedReferralId, setSelectedReferralId] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  // Deep-link: open specific referral from query param ?ref=
+  const [selectedReferralId, setSelectedReferralId] = useState<string | null>(() => searchParams.get('ref'));
   const [filterAvailability, setFilterAvailability] = useState('All');
 
   const staffingReferrals = state.referrals.filter(r => r.stage === 'Staffing');
@@ -238,6 +395,9 @@ export default function Staffing() {
           </p>
         </div>
       </div>
+
+      {/* Open Shift Board */}
+      <ShiftBoard />
 
       {/* Referrals Awaiting Staffing */}
       {staffingReferrals.length > 0 && (

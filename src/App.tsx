@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAppState, AppProvider } from './context/AppContext';
 import { canAccessRoute, getFirstAccessibleRoute, getVisibleRoutes } from './lib/permissions';
@@ -6,7 +6,7 @@ import type { AlertSeverity, AlertItem } from './types';
 import {
   LayoutDashboard, ClipboardList, Users, ShieldCheck, Smartphone, Star,
   Handshake, Settings as SettingsIcon, FileSearch, Lock, Bell, AlertTriangle,
-  X, CheckCircle, Eye, Info, AlertOctagon, XCircle, Siren
+  X, CheckCircle, Eye, Info, AlertOctagon, XCircle, Siren, Menu
 } from 'lucide-react';
 
 // --- Lazy load pages ---
@@ -109,15 +109,17 @@ function ToastContainer() {
 // --- Source record → route mapping for View Source button ---
 function getSourceRoute(alert: AlertItem): string | null {
   const t = alert.sourceRecordType;
+  const id = alert.sourceRecordId;
   if (!t) return null;
   switch (t) {
-    case 'Referral': return '/referrals';
-    case 'Compliance': return '/compliance';
-    case 'Quality': return '/quality';
-    case 'Partner': return '/referral-partners';
-    case 'Visit': return '/field-assistant';
-    case 'OASIS': return '/quality';
-    case 'HOPE': return '/quality';
+    case 'Referral': return `/referrals${id ? `?ref=${id}` : ''}`;
+    case 'Compliance': return `/compliance${id ? `?item=${id}` : ''}`;
+    case 'Quality': return `/quality${id ? `?item=${id}` : ''}`;
+    case 'Partner': return `/referral-partners${id ? `?partner=${id}` : ''}`;
+    case 'Visit': return `/field-assistant${id ? `?visit=${id}` : ''}`;
+    case 'OASIS': return `/quality${id ? `?oasis=${id}` : ''}`;
+    case 'HOPE': return `/quality${id ? `?hope=${id}` : ''}`;
+    case 'CatastrophicCase': return `/catastrophic-care${id ? `?case=${id}` : ''}`;
     default: return null;
   }
 }
@@ -281,15 +283,24 @@ function AlertBadge() {
 }
 
 // --- Sidebar ---
-function Sidebar({ onBellClick }: { onBellClick: () => void }) {
+function Sidebar({ onBellClick, mobileOpen, onClose }: { onBellClick: () => void; mobileOpen: boolean; onClose: () => void }) {
   const { state } = useAppState();
   const routes = getVisibleRoutes(state.currentUser.role);
+  const location = useLocation();
 
-  return (
+  // Close mobile sidebar on navigation
+  useEffect(() => { onClose(); }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const sidebarContent = (
     <aside className="w-56 bg-white border-r border-advisa-border flex flex-col h-full" aria-label="Main navigation">
-      <div className="p-4 border-b border-advisa-border">
-        <h1 className="text-base font-bold text-advisa-primary tracking-tight">AdvisaCare</h1>
-        <p className="text-[10px] text-slate-400 mt-0.5">VP Command Center</p>
+      <div className="p-4 border-b border-advisa-border flex items-center justify-between">
+        <div>
+          <h1 className="text-base font-bold text-advisa-primary tracking-tight">AdvisaCare</h1>
+          <p className="text-[10px] text-slate-400 mt-0.5">VP Command Center</p>
+        </div>
+        <button onClick={onClose} className="md:hidden p-1 hover:bg-slate-100 rounded" aria-label="Close menu">
+          <X size={18} />
+        </button>
       </div>
       <nav className="flex-1 py-2 overflow-y-auto">
         {routes.map(route => (
@@ -330,18 +341,39 @@ function Sidebar({ onBellClick }: { onBellClick: () => void }) {
       </div>
     </aside>
   );
+
+  return (
+    <>
+      {/* Desktop sidebar — always visible */}
+      <div className="hidden md:flex flex-shrink-0">
+        {sidebarContent}
+      </div>
+      {/* Mobile sidebar — overlay */}
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-40 flex">
+          <div className="flex-shrink-0">{sidebarContent}</div>
+          <div className="flex-1 bg-black/30" onClick={onClose} />
+        </div>
+      )}
+    </>
+  );
 }
 
 // --- Page header ---
-function PageHeader() {
+function PageHeader({ onMenuClick }: { onMenuClick: () => void }) {
   const location = useLocation();
   const { state } = useAppState();
   const routes = getVisibleRoutes(state.currentUser.role);
   const current = routes.find(r => r.path === location.pathname);
   return (
-    <header className="bg-white border-b border-advisa-border px-6 py-3 flex items-center justify-between">
-      <p className="text-sm font-semibold text-slate-700">{current?.label || 'AdvisaCare'}</p>
-      <div className="text-[10px] text-slate-400">
+    <header className="bg-white border-b border-advisa-border px-4 md:px-6 py-3 flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <button onClick={onMenuClick} className="md:hidden p-1 hover:bg-slate-100 rounded" aria-label="Open menu">
+          <Menu size={20} className="text-slate-600" />
+        </button>
+        <p className="text-sm font-semibold text-slate-700">{current?.label || 'AdvisaCare'}</p>
+      </div>
+      <div className="text-[10px] text-slate-400 hidden sm:block">
         Last refreshed: {new Date(state.lastRefreshed).toLocaleTimeString()}
       </div>
     </header>
@@ -352,6 +384,7 @@ function PageHeader() {
 function AppShell() {
   const { state } = useAppState();
   const [notifOpen, setNotifOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const firstRoute = getFirstAccessibleRoute(state.currentUser.role);
 
   return (
@@ -359,10 +392,10 @@ function AppShell() {
       <div className="flex flex-col h-screen">
         <HIPAABanner />
         <div className="flex flex-1 overflow-hidden">
-          <Sidebar onBellClick={() => setNotifOpen(true)} />
+          <Sidebar onBellClick={() => setNotifOpen(true)} mobileOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
           <div className="flex-1 flex flex-col overflow-hidden">
-            <PageHeader />
-            <main className="flex-1 overflow-y-auto p-6 bg-slate-50">
+            <PageHeader onMenuClick={() => setSidebarOpen(true)} />
+            <main className="flex-1 overflow-y-auto p-3 md:p-6 bg-slate-50">
               <Suspense fallback={<LoadingSpinner />}>
                 <Routes>
                   <Route path="/" element={<GuardedRoute path="/"><Dashboard /></GuardedRoute>} />

@@ -3,6 +3,7 @@ import { getComplianceStatus, type ComplianceCategory } from '../utils/dataLogic
 import { getDaysUntilExpiry, formatDate } from '../lib/dateUtils';
 import { exportToCSV } from '../lib/csvUtils';
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   ShieldCheck, AlertTriangle, Clock, CheckCircle, Download,
   Filter, RefreshCw
@@ -24,8 +25,12 @@ const statusIcons: Record<ComplianceCategory, React.ReactNode> = {
 
 export default function Compliance() {
   const { state, addAuditEntry, addToast } = useAppState();
+  const [searchParams] = useSearchParams();
   const [filterStatus, setFilterStatus] = useState<ComplianceCategory | 'All'>('All');
   const [filterStaff, setFilterStaff] = useState('All');
+
+  // Deep-link: highlight specific compliance item from ?item=
+  const highlightItemId = searchParams.get('item');
 
   const staffNames = ['All', ...new Set(state.compliance.map(c => c.staffName))];
 
@@ -145,7 +150,7 @@ export default function Compliance() {
           </thead>
           <tbody>
             {items.map(c => (
-              <tr key={c.id} className={`hover:bg-slate-50 transition-colors ${c.complianceStatus === 'Expired' ? 'bg-red-50/50' : ''}`}>
+              <tr key={c.id} className={`hover:bg-slate-50 transition-colors ${c.complianceStatus === 'Expired' ? 'bg-red-50/50' : ''} ${highlightItemId === c.id ? 'ring-2 ring-advisa-accent' : ''}`}>
                 <td className="table-cell font-semibold text-slate-800">{c.staffName}</td>
                 <td className="table-cell">{c.itemType}</td>
                 <td className="table-cell text-slate-500">{formatDate(c.expiryDate)}</td>

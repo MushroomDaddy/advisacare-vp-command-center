@@ -2,7 +2,7 @@
 // AdvisaCare VP Command Center — AppContext (Phase 3)
 // ==============================
 
-import { createContext, useContext, useReducer, type ReactNode, useCallback, useEffect } from 'react';
+import { createContext, useContext, useReducer, type ReactNode, useCallback, useEffect, useRef } from 'react';
 import type {
   AppState, CurrentUser, Referral, ReferralStage, StaffMember,
   FieldVisit, QualityItem, OASISAssessment, ReferralPartner,
@@ -16,8 +16,28 @@ import {
 } from '../data/seedData';
 import { generateDerivedAlerts, reconcileAlerts } from '../utils/alertEngine';
 
-// ==================== Initial State ====================
-const initialState: AppState = {
+// ==================== localStorage Persistence ====================
+const STORAGE_KEY = 'advisacare_demo_state';
+
+function loadPersistedState(): Partial<AppState> | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+function persistState(state: AppState) {
+  try {
+    // Persist everything except toasts (ephemeral)
+    const { toasts: _toasts, ...rest } = state;
+    void _toasts;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
+  } catch { /* quota exceeded — silently ignore */ }
+}
+
+// ==================== Seed (default) State ====================
+const seedState: AppState = {
   currentUser: { name: 'VP User', role: 'VP' },
   referrals: seedReferrals,
   staff: seedStaff,
@@ -35,6 +55,14 @@ const initialState: AppState = {
   toasts: [],
   lastRefreshed: new Date().toISOString(),
 };
+
+function buildInitialState(): AppState {
+  const persisted = loadPersistedState();
+  if (!persisted) return { ...seedState };
+  return { ...seedState, ...persisted, toasts: [] };
+}
+
+const initialState: AppState = buildInitialState();
 
 // ==================== Actions ====================
 type Action =
@@ -56,7 +84,11 @@ type Action =
   | { type: 'UPDATE_SHIFT_BOARD'; payload: { id: string; updates: Partial<ShiftBoardEntry> } }
   | { type: 'UPDATE_OFFLINE_SYNC'; payload: { id: string; updates: Partial<OfflineSyncItem> } }
   | { type: 'UPDATE_CATASTROPHIC_CASE'; payload: { id: string; updates: Partial<CatastrophicCase> } }
-  | { type: 'UPDATE_HOPE'; payload: { id: string; updates: Partial<import('../types').HOPEAssessment> } };
+  | { type: 'UPDATE_HOPE'; payload: { id: string; updates: Partial<import('../types').HOPEAssessment> } }
+  | { type: 'RESET_STATE' }
+  | { type: 'IMPORT_STATE'; payload: Partial<AppState> }
+  | { type: 'ADD_REFERRAL'; payload: Referral }
+  | { type: 'ADD_PARTNER'; payload: ReferralPartner };
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -178,6 +210,20 @@ function reducer(state: AppState, action: Action): AppState {
         ),
       };
 
+    case 'RESET_STATE': {
+      localStorage.removeItem(STORAGE_KEY);
+      return { ...seedState, toasts: [] };
+    }
+
+    case 'IMPORT_STATE':
+      return { ...state, ...action.payload, toasts: [] };
+
+    case 'ADD_REFERRAL':
+      return { ...state, referrals: [...state.referrals, action.payload] };
+
+    case 'ADD_PARTNER':
+      return { ...state, partners: [...state.partners, action.payload] };
+
     default:
       return state;
   }
@@ -204,6 +250,11 @@ interface AppContextType {
   updateOfflineSync: (id: string, updates: Partial<OfflineSyncItem>) => void;
   updateCatastrophicCase: (id: string, updates: Partial<CatastrophicCase>) => void;
   updateHOPE: (id: string, updates: Partial<import('../types').HOPEAssessment>) => void;
+  resetState: () => void;
+  importState: (data: Partial<AppState>) => void;
+  exportState: () => string;
+  addReferral: (referral: Referral) => void;
+  addPartner: (partner: ReferralPartner) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -249,6 +300,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateOfflineSync = useCallback((id: string, updates: Partial<OfflineSyncItem>) => dispatch({ type: 'UPDATE_OFFLINE_SYNC', payload: { id, updates } }), []);
   const updateCatastrophicCase = useCallback((id: string, updates: Partial<CatastrophicCase>) => dispatch({ type: 'UPDATE_CATASTROPHIC_CASE', payload: { id, updates } }), []);
   const updateHOPE = useCallback((id: string, updates: Partial<import('../types').HOPEAssessment>) => dispatch({ type: 'UPDATE_HOPE', payload: { id, updates } }), []);
+  const resetState = useCallback(() => dispatch({ type: 'RESET_STATE' }), []);
+  const importState = useCallback((data: Partial<AppState>) => dispatch({ type: 'IMPORT_STATE', payload: data }), []);
+  const exportState = useCallback(() => {
+    const { toasts: _toasts2, ...rest } = state;
+    void _toasts2;
+    return JSON.stringify(rest, null, 2);
+  }, [state]);
+  const addReferral = useCallback((referral: Referral) => dispatch({ type: 'ADD_REFERRAL', payload: referral }), []);
+  const addPartner = useCallback((partner: ReferralPartner) => dispatch({ type: 'ADD_PARTNER', payload: partner }), []);
+
+  // Persist state to localStorage on every change (debounced)
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(() => persistState(state), 300);
+    return () => clearTimeout(persistTimerRef.current);
+  }, [state]);
 
   return (
     <AppContext.Provider value={{
@@ -256,6 +324,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateVisit, addVisit, updateVisitChecklist, updateQuality, updateOASIS,
       updatePartner, addAuditEntry, addToast, removeToast, acknowledgeAlert,
       updateShiftBoard, updateOfflineSync, updateCatastrophicCase, updateHOPE,
+      resetState, importState, exportState, addReferral, addPartner,
     }}>
       {children}
     </AppContext.Provider>
