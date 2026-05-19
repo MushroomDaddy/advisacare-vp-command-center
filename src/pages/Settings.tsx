@@ -1,120 +1,205 @@
 import { useAppState } from '../context/AppContext';
-import { allRoutes, getPermissionsForRole } from '../lib/permissions';
-import { useState } from 'react';
+import { useToast } from '../components/Toast';
 import type { UserRole } from '../types';
-import { Settings as SettingsIcon, Check, X, ShieldAlert, User, ArrowRightLeft } from 'lucide-react';
+import { useState, useRef } from 'react';
+import {
+  Settings, User, Shield, Database, Download, Upload, RotateCcw,
+  CheckCircle, Clock, AlertTriangle, Lock,
+} from 'lucide-react';
 
-const roles: { id: string; name: string; roleKey: UserRole; description: string }[] = [
-  { id: 'vp', name: 'VP', roleKey: 'VP', description: 'Full access to all modules and executive dashboard' },
-  { id: 'intake', name: 'Intake Coordinator', roleKey: 'Intake Coordinator', description: 'Manage referrals, documents, eligibility, and partner relations' },
-  { id: 'scheduler', name: 'Scheduler', roleKey: 'Scheduler', description: 'View staffing, assign visits, manage schedules' },
-  { id: 'field', name: 'Field Staff', roleKey: 'Field Staff', description: 'View assigned visits, checklists, voice notes' },
-  { id: 'compliance', name: 'Compliance Admin', roleKey: 'Compliance Admin', description: 'Track licenses, training, certifications' },
-];
+const ROLES: UserRole[] = ['VP', 'Intake Coordinator', 'Scheduler', 'Field Staff', 'Compliance Admin'];
 
-const allPageLabels = allRoutes.map(r => r.label);
+export default function SettingsPage() {
+  const { state, setCurrentRole, resetDemoData, exportDemoData, importDemoData } = useAppState();
+  const { showToast } = useToast();
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-export default function Settings() {
-  const { state, addAuditEntry, setCurrentRole } = useAppState();
-  const [selectedRole, setSelectedRole] = useState(roles[0]);
-  const [showRoleChange, setShowRoleChange] = useState(false);
-  
-  const selectedPermissions = getPermissionsForRole(selectedRole.roleKey);
+  const handleRoleChange = (role: UserRole) => {
+    setCurrentRole(role);
+    showToast(`Role changed to ${role}`, 'success');
+  };
 
-  const handleRoleChange = (newRole: typeof roles[0]) => {
-    setCurrentRole(newRole.roleKey);
-    addAuditEntry({
-      user: state.currentUser.name,
-      role: state.currentUser.role,
-      action: 'Updated',
-      recordType: 'Staff',
-      recordId: 'user-' + Date.now(),
-      details: `Role changed to ${newRole.name}`,
-    });
-    setShowRoleChange(false);
+  const handleExport = () => {
+    const json = exportDemoData();
+    const blob = new Blob([json], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `advisacare-demo-data-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Demo data exported', 'success');
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const success = importDemoData(text);
+      if (success) {
+        showToast('Demo data imported successfully', 'success');
+      } else {
+        showToast('Invalid data file — import failed', 'error');
+      }
+    };
+    reader.readAsText(file);
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleReset = () => {
+    resetDemoData();
+    showToast('Demo data reset to seed state', 'success');
+    setShowResetConfirm(false);
+  };
+
+  const statusIcon = (status: string) => {
+    if (status === 'Implemented in Demo') return <CheckCircle size={13} className="text-emerald-500" />;
+    if (status === 'Planned') return <Clock size={13} className="text-amber-500" />;
+    if (status === 'Production Required') return <AlertTriangle size={13} className="text-red-500" />;
+    return <Lock size={13} className="text-slate-400" />;
+  };
+
+  const statusBadge = (status: string) => {
+    if (status === 'Implemented in Demo') return 'badge-success';
+    if (status === 'Planned') return 'badge-warning';
+    if (status === 'Production Required') return 'badge-urgent';
+    return 'badge-neutral';
   };
 
   return (
-    <div>
-      <div className="flex items-center gap-3 mb-6">
+    <div className="max-w-4xl mx-auto">
+      <div className="mb-6">
         <h2 className="page-title flex items-center gap-2">
-          <SettingsIcon size={22} className="text-advisa-accent" />
+          <Settings size={22} className="text-advisa-accent" />
           Settings
         </h2>
-        <span className="badge badge-neutral">Role-Based Access Mockup</span>
+        <p className="text-xs text-slate-400 mt-1">Demo settings, role switching, data management</p>
       </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div className="card">
-          <p className="section-title mb-3">Roles</p>
-          <div className="space-y-1.5">
-            {roles.map((role) => (
-              <button
-                key={role.id}
-                onClick={() => setSelectedRole(role)}
-                className={`w-full text-left px-3 py-2.5 rounded-lg transition-all border text-sm ${
-                  selectedRole.id === role.id
-                    ? 'bg-advisa-accent text-white border-advisa-accent shadow-md shadow-advisa-accent/20'
-                    : 'hover:bg-slate-50 border-advisa-border'
-                }`}
-              >
-                <p className="font-semibold text-xs">{role.name}</p>
-                <p className={`text-[10px] mt-0.5 ${selectedRole.id === role.id ? 'text-sky-100' : 'text-slate-400'}`}>{role.description}</p>
-              </button>
-            ))}
-          </div>
-        </div>
 
-        <div className="card md:col-span-2">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <p className="text-lg font-bold text-slate-800">{selectedRole.name}</p>
-              <p className="text-xs text-slate-500 mt-0.5">{selectedRole.description}</p>
-            </div>
-            <button onClick={() => setShowRoleChange(!showRoleChange)} className="btn-primary text-xs py-1.5">
-              <ArrowRightLeft size={13} />Switch Role
+      {/* Role Switching */}
+      <div className="card mb-5">
+        <div className="card-header"><User size={16} className="text-advisa-accent" />Role Switching (Demo)</div>
+        <p className="text-xs text-slate-500 mb-3">Switch roles to see how the interface adapts. Some pages are restricted based on role.</p>
+        <div className="flex flex-wrap gap-2">
+          {ROLES.map(role => (
+            <button
+              key={role}
+              onClick={() => handleRoleChange(role)}
+              className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                state.currentUser.role === role
+                  ? 'bg-advisa-accent text-white shadow-md'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {role}
             </button>
-          </div>
-          
-          <p className="section-title mb-2">Page Access</p>
-          <div className="grid grid-cols-2 gap-1.5 mb-4">
-            {allPageLabels.map((page) => {
-              const hasAccess = selectedPermissions.includes(page);
-              return (
-                <div key={page} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium ${hasAccess ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-50 text-slate-400'}`}>
-                  {hasAccess ? <Check size={13} /> : <X size={13} />}
-                  {page}
-                </div>
-              );
-            })}
-          </div>
+          ))}
+        </div>
+        <p className="text-[10px] text-slate-400 mt-3">Current: <strong>{state.currentUser.name}</strong> as <strong>{state.currentUser.role}</strong></p>
+      </div>
 
-          {showRoleChange && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-4">
-              <p className="text-xs font-semibold text-amber-800 mb-1">Confirm Role Switch</p>
-              <p className="text-[11px] text-amber-700 mb-2">Switch to <strong>{selectedRole.name}</strong>? Permissions will change.</p>
-              <div className="flex gap-2">
-                <button onClick={() => handleRoleChange(selectedRole)} className="btn-primary text-xs py-1.5">Confirm</button>
-                <button onClick={() => setShowRoleChange(false)} className="btn-secondary text-xs py-1.5">Cancel</button>
-              </div>
+      {/* Demo Data Management */}
+      <div className="card mb-5">
+        <div className="card-header"><Database size={16} className="text-advisa-accent" />Demo Data Management</div>
+        <p className="text-xs text-slate-500 mb-4">Manage your demo state. Data persists in localStorage. Seed data only resets when you explicitly reset.</p>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <button onClick={handleExport} className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors">
+            <Download size={18} className="text-emerald-600" />
+            <div className="text-left">
+              <p className="text-xs font-bold text-emerald-700">Export Demo Data</p>
+              <p className="text-[10px] text-emerald-600 mt-0.5">Download as JSON</p>
             </div>
-          )}
+          </button>
 
-          <div className="p-3 bg-sky-50 border border-sky-100 rounded-lg">
-            <div className="flex items-center gap-2 mb-1"><User size={13} className="text-sky-600" /><p className="text-xs font-semibold text-sky-800">Current Session</p></div>
-            <p className="text-xs text-sky-700">{state.currentUser.name} — {state.currentUser.role}</p>
+          <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-3 p-4 bg-sky-50 border border-sky-200 rounded-lg hover:bg-sky-100 transition-colors">
+            <Upload size={18} className="text-sky-600" />
+            <div className="text-left">
+              <p className="text-xs font-bold text-sky-700">Import Demo Data</p>
+              <p className="text-[10px] text-sky-600 mt-0.5">Load from JSON file</p>
+            </div>
+          </button>
+          <input ref={fileInputRef} type="file" accept=".json" onChange={handleImport} className="hidden" />
+
+          <button onClick={() => setShowResetConfirm(true)} className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
+            <RotateCcw size={18} className="text-red-600" />
+            <div className="text-left">
+              <p className="text-xs font-bold text-red-700">Reset Demo Data</p>
+              <p className="text-[10px] text-red-600 mt-0.5">Restore seed state</p>
+            </div>
+          </button>
+        </div>
+
+        <div className="mt-4 p-3 bg-slate-50 rounded-lg text-xs text-slate-500">
+          <p><strong>State:</strong> {state.referrals.length} referrals, {state.staff.length} staff, {state.compliance.length} compliance items, {state.alerts.length} alerts, {state.shifts.length} shifts, {state.auditLog.length} audit entries</p>
+        </div>
+      </div>
+
+      {/* Reset Confirm */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setShowResetConfirm(false)}>
+          <div className="absolute inset-0 bg-black/30" />
+          <div className="relative bg-white rounded-xl shadow-xl max-w-sm w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-red-700 mb-2">Reset All Demo Data?</h3>
+            <p className="text-xs text-slate-600 mb-4">This will clear all your changes and restore the original seed data. This cannot be undone.</p>
+            <div className="flex gap-2">
+              <button onClick={handleReset} className="flex-1 py-2 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700">Reset Everything</button>
+              <button onClick={() => setShowResetConfirm(false)} className="btn-secondary flex-1">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Production Readiness Checklist */}
+      <div className="card mb-5">
+        <div className="card-header"><Shield size={16} className="text-advisa-accent" />Production Readiness Checklist</div>
+        <p className="text-xs text-slate-500 mb-4">Track what's needed to move from demo to production-ready HIPAA-compliant system.</p>
+
+        <div className="space-y-2">
+          {state.productionReadiness.map(item => (
+            <div key={item.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+              <div className="flex items-center gap-2.5">
+                {statusIcon(item.status)}
+                <span className="text-xs text-slate-700">{item.feature}</span>
+              </div>
+              <span className={`badge ${statusBadge(item.status)}`}>{item.status}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 grid grid-cols-4 gap-3 text-center">
+          <div className="p-2 bg-emerald-50 rounded-lg">
+            <p className="text-lg font-bold text-emerald-600">{state.productionReadiness.filter(i => i.status === 'Implemented in Demo').length}</p>
+            <p className="text-[10px] text-emerald-700">In Demo</p>
+          </div>
+          <div className="p-2 bg-amber-50 rounded-lg">
+            <p className="text-lg font-bold text-amber-600">{state.productionReadiness.filter(i => i.status === 'Planned').length}</p>
+            <p className="text-[10px] text-amber-700">Planned</p>
+          </div>
+          <div className="p-2 bg-red-50 rounded-lg">
+            <p className="text-lg font-bold text-red-600">{state.productionReadiness.filter(i => i.status === 'Production Required').length}</p>
+            <p className="text-[10px] text-red-700">Prod Required</p>
+          </div>
+          <div className="p-2 bg-slate-100 rounded-lg">
+            <p className="text-lg font-bold text-slate-600">{state.productionReadiness.filter(i => i.status === 'Not Started').length}</p>
+            <p className="text-[10px] text-slate-600">Not Started</p>
           </div>
         </div>
       </div>
 
-      <div className="mt-5 card bg-slate-50">
-        <div className="flex items-center gap-2 mb-2"><ShieldAlert size={14} className="text-slate-500" /><p className="text-xs font-semibold text-slate-600">Production Security Notes</p></div>
-        <ul className="text-[11px] text-slate-500 space-y-1">
-          <li>• Implement OAuth 2.0 / OIDC with server-side session management</li>
-          <li>• Store roles in backend database with server-side permission checks</li>
-          <li>• Add MFA for sensitive roles (VP, Compliance Admin)</li>
-          <li>• Secure cookies/JWT with proper expiration</li>
-        </ul>
+      {/* Security Notice */}
+      <div className="card bg-amber-50 border-amber-200">
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold text-amber-800">Demo Data Only</p>
+            <p className="text-xs text-amber-700 mt-1">This application uses simulated data stored in your browser's localStorage. No real PHI is processed. Before any production use, complete the HIPAA production readiness checklist above.</p>
+          </div>
+        </div>
       </div>
     </div>
   );

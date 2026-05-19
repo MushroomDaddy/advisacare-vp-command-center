@@ -1,155 +1,333 @@
 import { useAppState } from '../context/AppContext';
+import { useToast } from '../components/Toast';
 import type { QualityStatus } from '../types';
-import { useState } from 'react';
-import { Star, AlertTriangle, Clock, CheckCircle, XCircle, BarChart3 } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import {
+  Star, AlertTriangle, FileText, ChevronDown, ChevronUp, Eye,
+  CheckCircle, XCircle, Pencil,
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+
+const STATUS_OPTIONS: QualityStatus[] = ['Open', 'In Progress', 'Resolved', 'Rejected'];
 
 export default function Quality() {
-  const { state, updateQualityStatus, addAuditEntry } = useAppState();
+  const { state, updateQualityStatus, updateQualityItem, addAuditEntry, createAlert } = useAppState();
+  const { showToast } = useToast();
+  const navigate = useNavigate();
   const [filterType, setFilterType] = useState('All');
-  const [filterPriority, setFilterPriority] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
-  
-  const types = ['All', 'OASIS Due', 'QA Review', 'Readmission Follow-up', 'Hospice Comfort', 'CAHPS Follow-up', 'Missed Visit', 'Late Note'];
-  const priorities = ['All', 'High', 'Medium', 'Low'];
-  const statuses = ['All', 'Open', 'In Progress', 'Complete'];
-  
-  const filtered = state.quality.filter(item => 
-    (filterType === 'All' || item.type === filterType) &&
-    (filterPriority === 'All' || item.priority === filterPriority) &&
-    (filterStatus === 'All' || item.status === filterStatus)
-  );
+  const [filterPriority, setFilterPriority] = useState('All');
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  const [editReviewerItem, setEditReviewerItem] = useState<string | null>(null);
+  const [editReviewerText, setEditReviewerText] = useState('');
+  const [reviewNotesItem, setReviewNotesItem] = useState<string | null>(null);
+  const [reviewNotesText, setReviewNotesText] = useState('');
+
+  const types = ['All', 'OASIS Due', 'QA Review', 'Readmission Follow-up', 'Hospice Comfort', 'CAHPS Follow-up', 'Missed Visit', 'Late Note', 'HOPE Assessment'];
+
+  const filtered = useMemo(() => state.quality.filter(q =>
+    (filterType === 'All' || q.type === filterType) &&
+    (filterStatus === 'All' || q.status === filterStatus) &&
+    (filterPriority === 'All' || q.priority === filterPriority)
+  ), [state.quality, filterType, filterStatus, filterPriority]);
 
   const counts = {
-    open: state.quality.filter(i => i.status === 'Open').length,
-    inProgress: state.quality.filter(i => i.status === 'In Progress').length,
-    complete: state.quality.filter(i => i.status === 'Complete').length,
+    total: state.quality.length,
+    open: state.quality.filter(q => q.status === 'Open').length,
+    inProgress: state.quality.filter(q => q.status === 'In Progress').length,
+    resolved: state.quality.filter(q => q.status === 'Resolved').length,
+    rejected: state.quality.filter(q => q.status === 'Rejected').length,
+    oasisDue: state.quality.filter(q => q.type === 'OASIS Due' && q.status !== 'Resolved').length,
+    hopeOverdue: state.quality.filter(q => q.type === 'HOPE Assessment' && q.status === 'Open' && new Date(q.dueDate) < new Date()).length,
   };
 
-  const handleStatusChange = (id: string, newStatus: string) => {
-    updateQualityStatus(id, newStatus as QualityStatus);
-    const item = state.quality.find(q => q.id === id);
-    addAuditEntry({
-      user: state.currentUser.name,
-      role: state.currentUser.role,
-      action: 'Updated',
-      recordType: 'Quality',
-      recordId: id,
-      details: `Status changed to ${newStatus} for ${item?.patientInitials} - ${item?.type}`,
+  // Check HOPE overdue alerts on render
+  useState(() => {
+    state.quality.filter(q => q.type === 'HOPE Assessment' && q.status === 'Open' && new Date(q.dueDate) < new Date()).forEach(q => {
+      createAlert({
+        type: 'HOPE Overdue', severity: 'High',
+        message: `HOPE Assessment overdue for ${q.patientInitials}`,
+        sourceRecordType: 'Quality', sourceRecordId: q.id,
+      });
     });
+  });
+
+  const handleStatusChange = (id: string, newStatus: QualityStatus) => {
+    const item = state.quality.find(q => q.id === id);
+    if (!item) return;
+
+    updateQualityStatus(id, newStatus);
+
+    addAuditEntry({
+      user: state.currentUser.name, role: state.currentUser.role,
+      action: 'Updated', recordType: 'Quality', recordId: id,
+      details: `${item.type} for ${item.patientInitials}: status → ${newStatus}`,
+      before: `status: ${item.status}`, after: `status: ${newStatus}`,
+    });
+
+    // OASIS reject/accept affects QA Operations
+    if (item.type === 'OASIS Due') {
+      if (newStatus === 'Rejected') {
+        createAlert({
+          type: 'OASIS Rejected', severity: 'High',
+          message: `OASIS rejected for ${item.patientInitials} — action required`,
+          sourceRecordType: 'Quality', sourceRecordId: id,
+        });
+        showToast(`OASIS rejected for ${item.patientInitials} — alert created`, 'warning');
+        return;
+      } else if (newStatus === 'Resolved') {
+        showToast(`OASIS accepted for ${item.patientInitials}`, 'success');
+        return;
+      }
+    }
+
+    if (item.type === 'CAHPS Follow-up' && newStatus === 'In Progress') {
+      showToast(`CAHPS follow-up started for ${item.patientInitials}`, 'info');
+      return;
+    }
+
+    showToast(`${item.type} → ${newStatus}`, 'success');
   };
 
-  const highPriorityOpen = state.quality.filter(q => q.priority === 'High' && q.status !== 'Complete');
+  const handleSaveReviewer = (id: string) => {
+    if (!editReviewerText.trim()) return;
+    updateQualityItem(id, { assignedTo: editReviewerText });
+    addAuditEntry({
+      user: state.currentUser.name, role: state.currentUser.role,
+      action: 'Updated', recordType: 'Quality', recordId: id,
+      details: `Reviewer changed to ${editReviewerText}`,
+    });
+    showToast('Reviewer updated', 'success');
+    setEditReviewerItem(null);
+    setEditReviewerText('');
+  };
+
+  const handleSaveReviewNotes = (id: string) => {
+    if (!reviewNotesText.trim()) return;
+    updateQualityItem(id, { reviewNotes: reviewNotesText });
+    addAuditEntry({
+      user: state.currentUser.name, role: state.currentUser.role,
+      action: 'Updated', recordType: 'Quality', recordId: id,
+      details: `Review notes updated`,
+    });
+    showToast('Review notes saved', 'success');
+    setReviewNotesItem(null);
+    setReviewNotesText('');
+  };
+
+  const handleViewSource = (item: typeof state.quality[0]) => {
+    // Navigate to the relevant page based on quality item type
+    if (item.type === 'OASIS Due' || item.type === 'HOPE Assessment') {
+      // Stay on quality page but could link to referral
+      navigate('/referrals');
+    } else if (item.type === 'Missed Visit') {
+      navigate('/field-assistant');
+    } else {
+      showToast('Source record opened', 'info');
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    if (status === 'Open') return 'badge-urgent';
+    if (status === 'In Progress') return 'badge-warning';
+    if (status === 'Resolved') return 'badge-success';
+    if (status === 'Rejected') return 'bg-red-100 text-red-700 border border-red-200';
+    return 'badge-neutral';
+  };
+
+  const isOverdue = (dueDate: string) => new Date(dueDate) < new Date();
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="page-title flex items-center gap-2">
-          <Star size={22} className="text-advisa-accent" />
-          Quality / OASIS / Hospice Watchboard
-        </h2>
-        <p className="text-xs text-slate-400 mt-1">{state.quality.length} items · {counts.open} open</p>
-      </div>
-
-      {highPriorityOpen.length > 0 && (
-        <div className="mb-5 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-xs text-red-700 font-medium">
-          <AlertTriangle size={14} />
-          {highPriorityOpen.length} high priority items need attention
-        </div>
-      )}
-      
-      <div className="grid grid-cols-3 gap-4 mb-5">
-        <div className="stat-card" style={{ borderLeftWidth: '3px', borderLeftColor: '#dc2626' }}>
-          <div className="flex items-center gap-2 mb-1"><XCircle size={15} className="text-red-600" /><p className="stat-label">Open</p></div>
-          <p className="stat-value text-red-600">{counts.open}</p>
-        </div>
-        <div className="stat-card" style={{ borderLeftWidth: '3px', borderLeftColor: '#d97706' }}>
-          <div className="flex items-center gap-2 mb-1"><Clock size={15} className="text-amber-600" /><p className="stat-label">In Progress</p></div>
-          <p className="stat-value text-amber-600">{counts.inProgress}</p>
-        </div>
-        <div className="stat-card" style={{ borderLeftWidth: '3px', borderLeftColor: '#059669' }}>
-          <div className="flex items-center gap-2 mb-1"><CheckCircle size={15} className="text-emerald-600" /><p className="stat-label">Complete</p></div>
-          <p className="stat-value text-emerald-600">{counts.complete}</p>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h2 className="page-title flex items-center gap-2">
+            <Star size={22} className="text-advisa-accent" />
+            Quality & Outcome Tracking
+          </h2>
+          <p className="text-xs text-slate-400 mt-1">{counts.total} items · {counts.open} open · {counts.hopeOverdue} HOPE overdue</p>
         </div>
       </div>
 
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+        <div className="stat-card" onClick={() => setFilterStatus('Open')} style={{ cursor: 'pointer' }}>
+          <p className="stat-label">Open</p><p className="stat-value text-red-600">{counts.open}</p>
+        </div>
+        <div className="stat-card" onClick={() => setFilterStatus('In Progress')} style={{ cursor: 'pointer' }}>
+          <p className="stat-label">In Progress</p><p className="stat-value text-amber-600">{counts.inProgress}</p>
+        </div>
+        <div className="stat-card" onClick={() => setFilterStatus('Resolved')} style={{ cursor: 'pointer' }}>
+          <p className="stat-label">Resolved</p><p className="stat-value text-emerald-600">{counts.resolved}</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-label">OASIS Due</p><p className="stat-value text-sky-600">{counts.oasisDue}</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-label">HOPE Overdue</p>
+          <p className={`stat-value ${counts.hopeOverdue > 0 ? 'text-red-600' : 'text-slate-800'}`}>{counts.hopeOverdue}</p>
+        </div>
+      </div>
+
+      {/* Filters */}
       <div className="flex gap-3 mb-5 flex-wrap">
-        <select className="select" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-          {types.map(t => <option key={t}>{t === 'All' ? 'All Types' : t}</option>)}
+        <select className="select" value={filterType} onChange={e => setFilterType(e.target.value)}>
+          {types.map(t => <option key={t} value={t}>{t === 'All' ? 'All Types' : t}</option>)}
         </select>
-        <select className="select" value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
-          {priorities.map(p => <option key={p}>{p === 'All' ? 'All Priorities' : p}</option>)}
+        <select className="select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+          <option value="All">All Statuses</option>
+          {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
         </select>
-        <select className="select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-          {statuses.map(s => <option key={s}>{s === 'All' ? 'All Statuses' : s}</option>)}
+        <select className="select" value={filterPriority} onChange={e => setFilterPriority(e.target.value)}>
+          <option value="All">All Priorities</option>
+          <option>High</option><option>Medium</option><option>Low</option>
         </select>
       </div>
 
-      <div className="card p-0 overflow-hidden mb-5">
+      {/* Quality Items Table */}
+      <div className="card p-0 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr>
               <th className="table-head">Type</th>
               <th className="table-head">Patient</th>
-              <th className="table-head">Priority</th>
               <th className="table-head">Due Date</th>
-              <th className="table-head">Assigned To</th>
+              <th className="table-head">Priority</th>
               <th className="table-head">Status</th>
+              <th className="table-head">Assigned</th>
+              <th className="table-head">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((item) => (
-              <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                <td className="table-cell font-semibold text-slate-800">{item.type}</td>
-                <td className="table-cell">{item.patientInitials}</td>
-                <td className="table-cell">
-                  <span className={`badge ${
-                    item.priority === 'High' ? 'badge-urgent' : item.priority === 'Medium' ? 'badge-warning' : 'badge-success'
-                  }`}>{item.priority}</span>
-                </td>
-                <td className="table-cell text-slate-500">{item.dueDate}</td>
-                <td className="table-cell text-slate-600">{item.assignedTo}</td>
-                <td className="table-cell">
-                  <select value={item.status} onChange={(e) => handleStatusChange(item.id, e.target.value)}
-                    className="text-xs px-2 py-1 border border-advisa-border rounded-md bg-white">
-                    <option>Open</option><option>In Progress</option><option>Complete</option>
-                  </select>
-                </td>
-              </tr>
+            {filtered.map(item => (
+              <>
+                <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${isOverdue(item.dueDate) && item.status === 'Open' ? 'bg-red-50/30' : ''}`}>
+                  <td className="table-cell">
+                    <div className="flex items-center gap-1.5">
+                      {item.type === 'HOPE Assessment' && isOverdue(item.dueDate) ? (
+                        <AlertTriangle size={12} className="text-red-500" />
+                      ) : item.type === 'OASIS Due' ? (
+                        <FileText size={12} className="text-sky-500" />
+                      ) : null}
+                      <span className="font-medium text-slate-800">{item.type}</span>
+                    </div>
+                  </td>
+                  <td className="table-cell font-semibold text-slate-800">{item.patientInitials}</td>
+                  <td className="table-cell">
+                    <span className={isOverdue(item.dueDate) && item.status !== 'Resolved' ? 'text-red-600 font-semibold' : 'text-slate-500'}>
+                      {item.dueDate}
+                    </span>
+                    {isOverdue(item.dueDate) && item.status !== 'Resolved' && (
+                      <span className="text-[9px] text-red-500 block">OVERDUE</span>
+                    )}
+                  </td>
+                  <td className="table-cell">
+                    <span className={`badge ${item.priority === 'High' ? 'badge-urgent' : item.priority === 'Medium' ? 'badge-warning' : 'badge-success'}`}>{item.priority}</span>
+                  </td>
+                  <td className="table-cell">
+                    <select
+                      value={item.status}
+                      onChange={e => handleStatusChange(item.id, e.target.value as QualityStatus)}
+                      className={`text-xs px-2 py-1 border rounded-md bg-white ${getStatusBadge(item.status).split(' ').includes('badge-urgent') ? 'border-red-200' : 'border-advisa-border'}`}
+                    >
+                      {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
+                    </select>
+                  </td>
+                  <td className="table-cell">
+                    <div className="flex items-center gap-1">
+                      <span className="text-slate-600">{item.assignedTo}</span>
+                      <button onClick={() => { setEditReviewerItem(item.id); setEditReviewerText(item.assignedTo); }} className="text-slate-400 hover:text-advisa-accent">
+                        <Pencil size={10} />
+                      </button>
+                    </div>
+                  </td>
+                  <td className="table-cell">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleViewSource(item)}
+                        className="text-advisa-accent hover:text-advisa-accent-dark text-[10px] flex items-center gap-0.5"
+                      >
+                        <Eye size={10} />Source
+                      </button>
+                      <button onClick={() => setExpandedItem(expandedItem === item.id ? null : item.id)} className="text-slate-400 hover:text-slate-600">
+                        {expandedItem === item.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {/* Expanded Detail */}
+                {expandedItem === item.id && (
+                  <tr key={`${item.id}-detail`}>
+                    <td colSpan={7} className="px-4 py-3 bg-slate-50">
+                      <div className="grid grid-cols-2 gap-4 text-xs">
+                        <div>
+                          <p className="font-semibold text-slate-500 mb-1">Review Notes</p>
+                          {item.reviewNotes ? (
+                            <p className="text-slate-600 bg-white p-2 rounded border">{item.reviewNotes}</p>
+                          ) : (
+                            <p className="text-slate-400 italic">No review notes</p>
+                          )}
+                          <button onClick={() => { setReviewNotesItem(item.id); setReviewNotesText(item.reviewNotes || ''); }}
+                            className="text-advisa-accent hover:underline mt-1 text-[10px]">
+                            {item.reviewNotes ? 'Edit Notes' : 'Add Notes'}
+                          </button>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-500 mb-1">Quick Actions</p>
+                          <div className="flex flex-wrap gap-1">
+                            {item.status !== 'Resolved' && (
+                              <button onClick={() => handleStatusChange(item.id, 'Resolved')} className="badge badge-success cursor-pointer hover:opacity-80">
+                                <CheckCircle size={10} /> Accept
+                              </button>
+                            )}
+                            {item.status !== 'Rejected' && item.type === 'OASIS Due' && (
+                              <button onClick={() => handleStatusChange(item.id, 'Rejected')} className="badge badge-urgent cursor-pointer hover:opacity-80">
+                                <XCircle size={10} /> Reject OASIS
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {/* Edit Reviewer Inline */}
+                {editReviewerItem === item.id && (
+                  <tr key={`${item.id}-reviewer`}>
+                    <td colSpan={7} className="px-4 py-3 bg-sky-50">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-slate-600">Update Reviewer:</span>
+                        <input type="text" className="input text-xs max-w-[200px]" value={editReviewerText} onChange={e => setEditReviewerText(e.target.value)} />
+                        <button onClick={() => handleSaveReviewer(item.id)} className="btn-primary text-xs py-1">Save</button>
+                        <button onClick={() => setEditReviewerItem(null)} className="btn-secondary text-xs py-1">Cancel</button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {/* Review Notes Inline */}
+                {reviewNotesItem === item.id && (
+                  <tr key={`${item.id}-notes`}>
+                    <td colSpan={7} className="px-4 py-3 bg-amber-50">
+                      <div className="flex flex-col gap-2">
+                        <span className="text-xs font-semibold text-slate-600">Review Notes:</span>
+                        <textarea className="input text-xs" rows={2} value={reviewNotesText} onChange={e => setReviewNotesText(e.target.value)} />
+                        <div className="flex gap-2">
+                          <button onClick={() => handleSaveReviewNotes(item.id)} className="btn-primary text-xs py-1">Save</button>
+                          <button onClick={() => setReviewNotesItem(null)} className="btn-secondary text-xs py-1">Cancel</button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </>
             ))}
           </tbody>
         </table>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="card">
-          <div className="card-header"><BarChart3 size={15} />Breakdown by Type</div>
-          <div className="space-y-2 text-sm">
-            {['OASIS Due', 'QA Review', 'Readmission Follow-up', 'Missed Visit', 'Late Note'].map(type => {
-              const count = state.quality.filter(q => q.type === type && q.status !== 'Complete').length;
-              return (
-                <div key={type} className="flex justify-between items-center">
-                  <span className="text-slate-600">{type}</span>
-                  <span className={`font-semibold text-xs ${count > 0 ? 'text-red-600' : 'text-slate-300'}`}>{count}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-header"><AlertTriangle size={15} />Open by Priority</div>
-          <div className="space-y-2 text-sm">
-            {['High', 'Medium', 'Low'].map(priority => {
-              const count = state.quality.filter(q => q.priority === priority && q.status !== 'Complete').length;
-              return (
-                <div key={priority} className="flex justify-between items-center">
-                  <span className={priority === 'High' ? 'text-red-600 font-medium' : priority === 'Medium' ? 'text-amber-600' : 'text-slate-600'}>{priority}</span>
-                  <span className="font-semibold text-xs">{count}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      {filtered.length === 0 && (
+        <div className="text-center py-12 text-slate-400 text-sm">No quality items match your filters</div>
+      )}
     </div>
   );
 }

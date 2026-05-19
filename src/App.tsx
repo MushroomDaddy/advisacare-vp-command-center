@@ -1,11 +1,12 @@
-import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom';
 import { AppProvider, useAppState } from './context/AppContext';
-import { useState, useMemo } from 'react';
+import { ToastProvider, useToast } from './components/Toast';
+import { useState, useMemo, useCallback } from 'react';
 import { allRoutes, canAccessRoute } from './lib/permissions';
 import {
   LayoutDashboard, ClipboardList, Users, ShieldCheck, Smartphone,
   Star, Handshake, Settings, FileSearch, Bell, AlertTriangle,
-  ChevronRight, Shield,
+  ChevronRight, Shield, Eye, Check, X, Menu, XCircle,
 } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Referrals from './pages/Referrals';
@@ -35,149 +36,272 @@ const iconMap: Record<string, React.ComponentType<{ className?: string; size?: n
   Star, Handshake, Settings, FileSearch,
 };
 
+// Map source record types to navigation paths
+const sourceRouteMap: Record<string, string> = {
+  Referral: '/referrals',
+  Staff: '/staffing',
+  Compliance: '/compliance',
+  Visit: '/field-assistant',
+  Quality: '/quality',
+  Partner: '/referral-partners',
+  Shift: '/staffing',
+  Document: '/referrals',
+  Alert: '/',
+  System: '/',
+};
+
+function NotificationCenter({ onClose }: { onClose: () => void }) {
+  const { state, acknowledgeAlert, resolveAlert, addAuditEntry } = useAppState();
+  const { showToast } = useToast();
+  const navigate = useNavigate();
+
+  const activeAlerts = useMemo(() =>
+    state.alerts.filter(a => !a.resolved),
+    [state.alerts]
+  );
+
+  const unacknowledgedCount = activeAlerts.filter(a => !a.acknowledged).length;
+
+  const grouped = useMemo(() => {
+    const groups: Record<string, typeof activeAlerts> = { Critical: [], High: [], Medium: [], Low: [] };
+    activeAlerts.forEach(a => {
+      if (groups[a.severity]) groups[a.severity].push(a);
+    });
+    return groups;
+  }, [activeAlerts]);
+
+  const handleAcknowledge = (id: string) => {
+    acknowledgeAlert(id);
+    addAuditEntry({ user: state.currentUser.name, role: state.currentUser.role, action: 'Updated', recordType: 'Alert', recordId: id, details: 'Alert acknowledged' });
+    showToast('Alert acknowledged', 'info');
+  };
+
+  const handleResolve = (id: string) => {
+    resolveAlert(id);
+    addAuditEntry({ user: state.currentUser.name, role: state.currentUser.role, action: 'Updated', recordType: 'Alert', recordId: id, details: 'Alert resolved' });
+    showToast('Alert resolved', 'success');
+  };
+
+  const handleViewSource = (sourceType: string) => {
+    const path = sourceRouteMap[sourceType] || '/';
+    navigate(path);
+    onClose();
+  };
+
+  const severityColors: Record<string, string> = {
+    Critical: 'bg-red-50 border-red-200 text-red-800',
+    High: 'bg-amber-50 border-amber-200 text-amber-800',
+    Medium: 'bg-sky-50 border-sky-200 text-sky-800',
+    Low: 'bg-slate-50 border-slate-200 text-slate-700',
+  };
+
+  const severityDots: Record<string, string> = {
+    Critical: 'bg-red-500', High: 'bg-amber-500', Medium: 'bg-sky-500', Low: 'bg-slate-400',
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/20" />
+      <div className="relative w-full max-w-md bg-white shadow-xl overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="sticky top-0 bg-white border-b border-advisa-border px-5 py-4 flex items-center justify-between z-10">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800">Notification Center</h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">{unacknowledgedCount} unacknowledged · {activeAlerts.length} active</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-500" /></button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {(Object.entries(grouped) as [string, typeof activeAlerts][]).map(([severity, alerts]) => {
+            if (alerts.length === 0) return null;
+            return (
+              <div key={severity}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`w-2 h-2 rounded-full ${severityDots[severity]}`} />
+                  <span className="text-xs font-semibold text-slate-600">{severity} ({alerts.length})</span>
+                </div>
+                <div className="space-y-2">
+                  {alerts.map(alert => (
+                    <div key={alert.id} className={`p-3 rounded-lg border text-xs ${severityColors[alert.severity]} ${alert.acknowledged ? 'opacity-60' : ''}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold">{alert.type}</p>
+                          <p className="mt-0.5 opacity-80">{alert.message}</p>
+                          <p className="mt-1 text-[10px] opacity-50">{new Date(alert.createdAt).toLocaleString()}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-1.5 mt-2">
+                        <button
+                          onClick={() => handleViewSource(alert.sourceRecordType)}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-white/60 hover:bg-white rounded border border-current/10 text-[10px] font-medium"
+                        >
+                          <Eye size={10} />View Source
+                        </button>
+                        {!alert.acknowledged && (
+                          <button
+                            onClick={() => handleAcknowledge(alert.id)}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-white/60 hover:bg-white rounded border border-current/10 text-[10px] font-medium"
+                          >
+                            <Check size={10} />Acknowledge
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleResolve(alert.id)}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-white/60 hover:bg-white rounded border border-current/10 text-[10px] font-medium"
+                        >
+                          <XCircle size={10} />Resolve
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          {activeAlerts.length === 0 && (
+            <div className="text-center py-12 text-slate-400 text-sm">No active alerts</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AppContent() {
-  const { state, getComplianceStatus } = useAppState();
+  const { state } = useAppState();
   const [showNotifications, setShowNotifications] = useState(false);
-  
-  const notifications = useMemo(() => {
-    const items: { text: string; type: string }[] = [];
-    
-    state.referrals.filter(r => r.urgency === 'Immediate').forEach(r => {
-      items.push({ text: `Urgent referral: ${r.patientInitials} (${r.serviceType})`, type: 'urgent' });
-    });
-    
-    state.compliance.filter(c => getComplianceStatus(c) === 'Expired').forEach(c => {
-      items.push({ text: `Expired: ${c.staffName} - ${c.itemType}`, type: 'urgent' });
-    });
-    
-    state.quality.filter(q => q.status === 'Open' && q.priority === 'High').forEach(q => {
-      items.push({ text: `Open QA: ${q.type} for ${q.patientInitials}`, type: 'warning' });
-    });
-    
-    return items;
-  }, [state, getComplianceStatus]);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const canAccess = (path: string) => canAccessRoute(path, state.currentUser.role);
+  const unacknowledgedCount = useMemo(() =>
+    state.alerts.filter(a => !a.resolved && !a.acknowledged).length,
+    [state.alerts]
+  );
 
-  const ProtectedRoute = ({ element, path }: { element: React.ReactNode, path: string }) => {
-    if (!canAccess(path)) {
-      return <Navigate to="/" replace />;
-    }
+  const canAccess = useCallback((path: string) => canAccessRoute(path, state.currentUser.role), [state.currentUser.role]);
+
+  const ProtectedRoute = ({ element, path }: { element: React.ReactNode; path: string }) => {
+    if (!canAccess(path)) return <Navigate to="/" replace />;
     return <>{element}</>;
   };
 
   const visibleRoutes = allRoutes.filter(r => canAccess(r.path));
 
+  const sidebarContent = (
+    <>
+      {/* Logo */}
+      <div className="px-6 py-5 border-b border-white/10">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-advisa-accent rounded-lg flex items-center justify-center shadow-md">
+            <Shield size={20} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-base font-bold tracking-tight leading-tight">AdvisaCare</h1>
+            <p className="text-[10px] font-medium text-sky-300 uppercase tracking-widest">VP Command Center</p>
+          </div>
+        </div>
+      </div>
+
+      {/* User Info */}
+      <div className="px-6 py-4 border-b border-white/10">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center text-xs font-semibold">
+            {state.currentUser.name.split(' ').map(n => n[0]).join('')}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">{state.currentUser.name}</p>
+            <p className="text-[11px] text-sky-300 font-medium">{state.currentUser.role}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        <p className="px-3 pb-2 text-[10px] font-semibold text-sky-300/60 uppercase tracking-widest">Navigation</p>
+        {visibleRoutes.map((link) => {
+          const Icon = iconMap[link.icon];
+          return (
+            <NavLink
+              key={link.path}
+              to={link.path}
+              end={link.path === '/'}
+              onClick={() => setSidebarOpen(false)}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 group ${
+                  isActive
+                    ? 'bg-advisa-accent text-white shadow-md shadow-advisa-accent/25'
+                    : 'text-slate-300 hover:bg-white/8 hover:text-white'
+                }`
+              }
+            >
+              {Icon && <Icon size={17} className="flex-shrink-0" />}
+              <span className="flex-1">{link.label}</span>
+              <ChevronRight size={14} className="opacity-0 group-hover:opacity-50 transition-opacity" />
+            </NavLink>
+          );
+        })}
+      </nav>
+
+      {/* Footer */}
+      <div className="px-4 py-3 border-t border-white/10">
+        <div className="flex items-center gap-2 text-[10px] text-slate-400">
+          <ShieldCheck size={12} />
+          <span>HIPAA-Conscious Prototype</span>
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-advisa-surface flex">
-        {/* Professional Sidebar */}
-        <aside className="w-[260px] bg-gradient-to-b from-advisa-primary to-advisa-secondary text-white hidden md:flex md:flex-col shadow-sidebar">
-          {/* Logo / Brand */}
-          <div className="px-6 py-5 border-b border-white/10">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-advisa-accent rounded-lg flex items-center justify-center shadow-md">
-                <Shield size={20} className="text-white" />
-              </div>
-              <div>
-                <h1 className="text-base font-bold tracking-tight leading-tight">AdvisaCare</h1>
-                <p className="text-[10px] font-medium text-sky-300 uppercase tracking-widest">VP Command Center</p>
-              </div>
-            </div>
-          </div>
-
-          {/* User Info */}
-          <div className="px-6 py-4 border-b border-white/10">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center text-xs font-semibold">
-                {state.currentUser.name.split(' ').map(n => n[0]).join('')}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{state.currentUser.name}</p>
-                <p className="text-[11px] text-sky-300 font-medium">{state.currentUser.role}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-            <p className="px-3 pb-2 text-[10px] font-semibold text-sky-300/60 uppercase tracking-widest">Navigation</p>
-            {visibleRoutes.map((link) => {
-              const Icon = iconMap[link.icon];
-              return (
-                <NavLink
-                  key={link.path}
-                  to={link.path}
-                  end={link.path === '/'}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 group ${
-                      isActive
-                        ? 'bg-advisa-accent text-white shadow-md shadow-advisa-accent/25'
-                        : 'text-slate-300 hover:bg-white/8 hover:text-white'
-                    }`
-                  }
-                >
-                  {Icon && <Icon size={17} className="flex-shrink-0" />}
-                  <span className="flex-1">{link.label}</span>
-                  <ChevronRight size={14} className="opacity-0 group-hover:opacity-50 transition-opacity" />
-                </NavLink>
-              );
-            })}
-          </nav>
-
-          {/* HIPAA Footer */}
-          <div className="px-4 py-3 border-t border-white/10">
-            <div className="flex items-center gap-2 text-[10px] text-slate-400">
-              <ShieldCheck size={12} />
-              <span>HIPAA-Conscious Prototype</span>
-            </div>
-          </div>
+        {/* Desktop Sidebar */}
+        <aside className="w-[260px] bg-gradient-to-b from-advisa-primary to-advisa-secondary text-white hidden md:flex md:flex-col shadow-sidebar flex-shrink-0">
+          {sidebarContent}
         </aside>
 
+        {/* Mobile Sidebar Overlay */}
+        {sidebarOpen && (
+          <div className="fixed inset-0 z-50 md:hidden" onClick={() => setSidebarOpen(false)}>
+            <div className="absolute inset-0 bg-black/40" />
+            <aside className="relative w-[260px] h-full bg-gradient-to-b from-advisa-primary to-advisa-secondary text-white flex flex-col shadow-sidebar" onClick={e => e.stopPropagation()}>
+              {sidebarContent}
+            </aside>
+          </div>
+        )}
+
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto min-w-0">
           {/* Top Bar */}
-          <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-advisa-border px-8 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
-              <AlertTriangle size={14} />
-              <span className="font-medium">Prototype — demo data only — not for production use</span>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="relative p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                <Bell size={18} className="text-slate-500" />
-                {notifications.length > 0 && (
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-                )}
+          <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-advisa-border px-4 md:px-8 py-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setSidebarOpen(true)} className="md:hidden p-1.5 hover:bg-slate-100 rounded-lg">
+                <Menu size={20} className="text-slate-600" />
               </button>
-            </div>
-          </header>
-
-          {/* Notification Panel */}
-          {showNotifications && notifications.length > 0 && (
-            <div className="mx-8 mt-4">
-              <div className="card max-w-md ml-auto">
-                <div className="card-header">
-                  <Bell size={15} />
-                  <span>Alerts ({notifications.length})</span>
-                </div>
-                <ul className="space-y-2">
-                  {notifications.map((n, i) => (
-                    <li key={i} className={`text-xs p-2.5 rounded-lg flex items-start gap-2 ${n.type === 'urgent' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
-                      <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
-                      {n.text}
-                    </li>
-                  ))}
-                </ul>
+              <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                <AlertTriangle size={14} className="flex-shrink-0" />
+                <span className="font-medium hidden sm:inline">Prototype only — demo data — not for production use without HIPAA review</span>
+                <span className="font-medium sm:hidden">Demo only</span>
               </div>
             </div>
-          )}
+
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative p-2 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0"
+            >
+              <Bell size={18} className="text-slate-500" />
+              {unacknowledgedCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                  {unacknowledgedCount}
+                </span>
+              )}
+            </button>
+          </header>
+
+          {/* Notification Center */}
+          {showNotifications && <NotificationCenter onClose={() => setShowNotifications(false)} />}
 
           {/* Page Content */}
-          <div className="p-8">
+          <div className="p-4 md:p-8">
             <Routes>
               {allRoutes.map((route) => {
                 const Component = routeComponents[route.path];
@@ -201,7 +325,9 @@ function AppContent() {
 function App() {
   return (
     <AppProvider>
-      <AppContent />
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
     </AppProvider>
   );
 }
