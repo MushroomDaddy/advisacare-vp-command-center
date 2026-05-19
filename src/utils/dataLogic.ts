@@ -281,7 +281,9 @@ export function hasWorkRestriction(staffId: string, compliance: ComplianceItem[]
 
 // ==================== Compliance Helpers ====================
 
-export function getComplianceStatus(item: ComplianceItem): 'Expired' | 'Critical Soon' | 'Due Soon' | 'Compliant' {
+export type ComplianceCategory = 'Expired' | 'Critical Soon' | 'Due Soon' | 'Compliant';
+
+export function getComplianceStatus(item: ComplianceItem): ComplianceCategory {
   if (isExpired(item.expiryDate)) return 'Expired';
   if (isDueSoon(item.expiryDate, 30)) return 'Critical Soon';
   if (isDueSoon(item.expiryDate, 90)) return 'Due Soon';

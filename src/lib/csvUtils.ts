@@ -4,12 +4,13 @@
 
 export function generateCSV(
   columns: string[],
-  data: Record<string, string>[]
+  data: Record<string, unknown>[]
 ): string {
   const header = columns.join(',');
   const rows = data.map(row =>
     columns.map(col => {
-      const val = row[col] ?? '';
+      const raw = row[col];
+      const val = raw == null ? '' : String(raw);
       return val.includes(',') || val.includes('"') || val.includes('\n')
         ? `"${val.replace(/"/g, '""')}"`
         : val;
@@ -36,22 +37,22 @@ function downloadCSV(csv: string, filename: string): void {
  *   exportToCSV(columns: string[], data: Record<string, string>[], filename?: string)
  */
 export function exportToCSV(
-  first: string[] | Record<string, string>[],
-  second?: Record<string, string>[] | string,
+  first: string[] | Record<string, unknown>[],
+  second?: Record<string, unknown>[] | string,
   third?: string
 ): void {
   let columns: string[];
-  let data: Record<string, string>[];
+  let data: Record<string, unknown>[];
   let filename: string;
 
   if (first.length > 0 && typeof first[0] === 'string') {
     // Legacy: exportToCSV(columns, data, filename)
     columns = first as string[];
-    data = second as Record<string, string>[];
+    data = second as Record<string, unknown>[];
     filename = (third as string) || 'export.csv';
   } else {
     // New: exportToCSV(data, filename)
-    data = first as Record<string, string>[];
+    data = first as Record<string, unknown>[];
     columns = data.length > 0 ? Object.keys(data[0]) : [];
     filename = (typeof second === 'string' ? second : undefined) || 'export.csv';
   }

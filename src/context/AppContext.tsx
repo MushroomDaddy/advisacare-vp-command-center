@@ -211,17 +211,19 @@ const AppContext = createContext<AppContextType | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  // Run alert engine on state changes
+  // Run alert engine on state changes — destructure for stable deps
+  const { referrals, compliance, quality, visits, oasisAssessments, hopeAssessments, partners, alerts: currentAlerts } = state;
   useEffect(() => {
     const derived = generateDerivedAlerts(state);
-    const reconciled = reconcileAlerts(state.alerts, derived);
+    const reconciled = reconcileAlerts(currentAlerts, derived);
     // Only dispatch if alerts actually changed to avoid infinite loop
-    const changed = reconciled.length !== state.alerts.length ||
-      reconciled.some((a, i) => a.id !== state.alerts[i]?.id || a.resolved !== state.alerts[i]?.resolved);
+    const changed = reconciled.length !== currentAlerts.length ||
+      reconciled.some((a, i) => a.id !== currentAlerts[i]?.id || a.resolved !== currentAlerts[i]?.resolved);
     if (changed) {
       dispatch({ type: 'RECONCILE_ALERTS', payload: reconciled });
     }
-  }, [state.referrals, state.compliance, state.quality, state.visits, state.oasisAssessments, state.hopeAssessments, state.partners]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- state is derived from the listed deps; listing state directly would over-fire
+  }, [referrals, compliance, quality, visits, oasisAssessments, hopeAssessments, partners, currentAlerts]);
 
   const setUser = useCallback((user: CurrentUser) => dispatch({ type: 'SET_USER', payload: user }), []);
   const updateReferral = useCallback((id: string, updates: Partial<Referral>) => dispatch({ type: 'UPDATE_REFERRAL', payload: { id, updates } }), []);

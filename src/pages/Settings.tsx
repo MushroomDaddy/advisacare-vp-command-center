@@ -12,10 +12,10 @@ const roles: { role: UserRole; name: string; description: string }[] = [
 ];
 
 export default function SettingsPage() {
-  const { state, setCurrentRole, addToast } = useAppState();
+  const { state, setUser, addToast } = useAppState();
 
   const handleRoleChange = (role: UserRole) => {
-    setCurrentRole(role);
+    setUser({ name: roleNameMap[role], role });
     addToast(`Switched to ${roleNameMap[role]} (${role})`, 'info');
   };
 

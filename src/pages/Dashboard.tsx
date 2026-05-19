@@ -44,7 +44,7 @@ function AlertBanner({ alerts }: { alerts: AlertItem[] }) {
               {alert.owner && <p className="text-red-400 mt-0.5">Owner: {alert.owner}</p>}
             </div>
             <button
-              onClick={() => acknowledgeAlert(alert.id)}
+              onClick={() => alert.id && acknowledgeAlert(alert.id)}
               className="btn-secondary text-[10px] py-1 px-2 ml-2"
             >
               Acknowledge
@@ -145,7 +145,7 @@ function NotificationCenter() {
               </div>
               <div className="flex flex-col items-end gap-1 flex-shrink-0">
                 {!alert.acknowledged && (
-                  <button onClick={() => acknowledgeAlert(alert.id)} className="text-[9px] text-advisa-accent hover:underline">Ack</button>
+                  <button onClick={() => alert.id && acknowledgeAlert(alert.id)} className="text-[9px] text-advisa-accent hover:underline">Ack</button>
                 )}
                 {alert.acknowledged && (
                   <span className="text-[8px] text-slate-400">✓ {alert.acknowledgedBy}</span>
