@@ -19,6 +19,7 @@ export const allRoutes: RouteConfig[] = [
   { path: '/compliance', label: 'Compliance', icon: 'ShieldCheck', roles: ['VP', 'Compliance Admin'] },
   { path: '/field-assistant', label: 'Field Assistant', icon: 'Smartphone', roles: ['VP', 'Scheduler', 'Field Staff'] },
   { path: '/quality', label: 'Quality', icon: 'Star', roles: ['VP', 'Field Staff'] },
+  { path: '/catastrophic-care', label: 'Catastrophic Care', icon: 'HeartPulse', roles: ['VP', 'Scheduler'] },
   { path: '/referral-partners', label: 'Partners', icon: 'Handshake', roles: ['VP', 'Intake Coordinator'] },
   { path: '/settings', label: 'Settings', icon: 'Settings', roles: ['VP', 'Intake Coordinator', 'Scheduler', 'Field Staff', 'Compliance Admin'] },
   { path: '/audit-log', label: 'Audit Log', icon: 'FileSearch', roles: ['VP', 'Compliance Admin', 'Intake Coordinator'] },
@@ -32,6 +33,15 @@ export function canAccessRoute(path: string, role: UserRole): boolean {
 
 export function getVisibleRoutes(role: UserRole): RouteConfig[] {
   return allRoutes.filter(r => r.roles.includes(role));
+}
+
+/**
+ * Returns the first allowed route for a role.
+ * Used when a user is on an unauthorized route after role switch.
+ */
+export function getFirstAllowedRoute(role: UserRole): string {
+  const visible = getVisibleRoutes(role);
+  return visible.length > 0 ? visible[0].path : '/settings';
 }
 
 export function getPermissionsForRole(role: UserRole): string[] {

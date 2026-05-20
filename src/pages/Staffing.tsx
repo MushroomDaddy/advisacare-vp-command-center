@@ -1,22 +1,37 @@
 import { useAppState } from '../context/AppContext';
 import { useToast } from '../components/Toast';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { hasBlockingCredential } from '../lib/complianceUtils';
 import {
   Users, Calendar, AlertTriangle, UserCheck, Target, Phone, MapPin,
   Plus, ChevronDown, ChevronUp, CheckCircle, XCircle, Clock, ArrowRight,
 } from 'lucide-react';
 
 export default function Staffing() {
-  const { state, addAuditEntry, offerShift, acceptShift, declineShift, createShift, createAlert, resolveAlert, updateReferral, getComplianceStatus } = useAppState();
+  const { state, addAuditEntry, offerShift, acceptShift, declineShift, createShift, createAlert, resolveAlert, updateReferral } = useAppState();
   const { showToast } = useToast();
   const [filterRole, setFilterRole] = useState('All');
   const [filterAvailability, setFilterAvailability] = useState('All');
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'staff' | 'shifts'>('staff');
   const [showCreateShift, setShowCreateShift] = useState(false);
   const [newShiftReferral, setNewShiftReferral] = useState('');
   const [newShiftDate, setNewShiftDate] = useState(new Date().toISOString().split('T')[0]);
   const [newShiftTime, setNewShiftTime] = useState('08:00-16:00');
+  const [overrideReason] = useState('');
+  const [searchParams] = useSearchParams();
+  const deepLinkShift = searchParams.get('shift');
+  const [activeTab, setActiveTab] = useState<'staff' | 'shifts'>(deepLinkShift ? 'shifts' : 'staff');
+
+  // Deep link: ?shift=sh1 scrolls to that shift
+  useEffect(() => {
+    if (deepLinkShift) {
+      setTimeout(() => {
+        const el = document.getElementById(`shift-${deepLinkShift}`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 200);
+    }
+  }, [deepLinkShift]);
 
   const roles = ['All', 'RN', 'LPN', 'HHA', 'CNA', 'PT', 'OT', 'ST'];
   const availabilities = ['All', 'Available', 'Partially', 'Unavailable'];
@@ -32,7 +47,7 @@ export default function Staffing() {
 
   // Check if a staff member has expired credentials
   const hasExpiredCredentials = (staffId: string) => {
-    return state.compliance.some(c => c.staffId === staffId && getComplianceStatus(c) === 'Expired');
+    return hasBlockingCredential(staffId, state.compliance);
   };
 
   // Best match score calculation
@@ -59,8 +74,8 @@ export default function Staffing() {
   };
 
   const handleOfferShift = (shiftId: string, staffId: string) => {
-    if (hasExpiredCredentials(staffId)) {
-      showToast('Cannot assign — staff has expired credentials. Renew first.', 'error');
+    if (hasExpiredCredentials(staffId) && !overrideReason.trim()) {
+      showToast('Staff has expired credentials. Enter a demo override reason to proceed, or renew credentials first.', 'error');
       return;
     }
     const staff = state.staff.find(s => s.id === staffId);
@@ -120,7 +135,7 @@ export default function Staffing() {
     const ref = state.referrals.find(r => r.id === newShiftReferral);
     if (!ref) { showToast('Select a referral', 'error'); return; }
 
-    createShift({
+    const newId = createShift({
       referralId: ref.id,
       patientInitials: ref.patientInitials,
       serviceType: ref.serviceType,
@@ -134,12 +149,12 @@ export default function Staffing() {
     createAlert({
       type: 'Open Shift', severity: ref.urgency === 'Immediate' ? 'Critical' : 'High',
       message: `New open shift for ${ref.patientInitials} — ${ref.serviceType}`,
-      sourceRecordType: 'Shift', sourceRecordId: 'new',
+      sourceRecordType: 'Shift', sourceRecordId: newId,
     });
 
     addAuditEntry({
       user: state.currentUser.name, role: state.currentUser.role,
-      action: 'Created', recordType: 'Shift', recordId: 'new',
+      action: 'Created', recordType: 'Shift', recordId: newId,
       details: `Shift created for ${ref.patientInitials} on ${newShiftDate}`,
     });
 
@@ -363,7 +378,7 @@ export default function Staffing() {
                   </div>
                   <div className="space-y-2">
                     {shifts.map(shift => (
-                      <div key={shift.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                      <div key={shift.id} id={`shift-${shift.id}`} className="p-3 bg-slate-50 rounded-lg border border-slate-200">
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-semibold text-xs text-slate-800">{shift.patientInitials}</span>
                           <span className="text-[10px] text-slate-400">{shift.date}</span>

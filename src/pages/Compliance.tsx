@@ -1,7 +1,10 @@
 import { useAppState } from '../context/AppContext';
 import { useToast } from '../components/Toast';
-import { useState } from 'react';
-import { ShieldCheck, CheckCircle, Clock, XCircle, RefreshCw, Upload, X } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { getComplianceCategory, daysUntil } from '../lib/complianceUtils';
+import type { ComplianceCategory } from '../types';
+import { ShieldCheck, CheckCircle, Clock, XCircle, AlertTriangle, RefreshCw, Upload, X } from 'lucide-react';
 
 interface RenewModalData {
   itemId: string;
@@ -10,29 +13,35 @@ interface RenewModalData {
 }
 
 export default function Compliance() {
-  const { state, updateComplianceItem, getComplianceStatus, addAuditEntry, resolveAlert, createAlert } = useAppState();
+  const { state, updateComplianceItem, addAuditEntry, resolveAlert, runAlertEngine } = useAppState();
   const { showToast } = useToast();
+  const [searchParams] = useSearchParams();
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterType, setFilterType] = useState('All');
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null);
   const [renewModal, setRenewModal] = useState<RenewModalData | null>(null);
   const [renewDate, setRenewDate] = useState('');
   const [renewProof, setRenewProof] = useState('');
+  const highlightId = searchParams.get('item');
 
-  const filtered = state.compliance.filter(item =>
-    (filterStatus === 'All' || getComplianceStatus(item) === filterStatus) &&
+  const getCategory = (expiryDate: string): ComplianceCategory => getComplianceCategory(expiryDate);
+
+  const filtered = useMemo(() => state.compliance.filter(item =>
+    (filterStatus === 'All' || getCategory(item.expiryDate) === filterStatus) &&
     (filterType === 'All' || item.itemType === filterType)
-  );
+  ), [state.compliance, filterStatus, filterType]);
 
-  const counts = {
-    compliant: state.compliance.filter(i => getComplianceStatus(i) === 'Compliant').length,
-    dueSoon: state.compliance.filter(i => getComplianceStatus(i) === 'Due Soon').length,
-    expired: state.compliance.filter(i => getComplianceStatus(i) === 'Expired').length,
-  };
+  const counts = useMemo(() => ({
+    compliant: state.compliance.filter(i => getCategory(i.expiryDate) === 'Compliant').length,
+    criticalSoon: state.compliance.filter(i => getCategory(i.expiryDate) === 'Critical Soon').length,
+    dueSoon: state.compliance.filter(i => getCategory(i.expiryDate) === 'Due Soon').length,
+    expired: state.compliance.filter(i => getCategory(i.expiryDate) === 'Expired').length,
+  }), [state.compliance]);
 
-  const getStatusBadge = (status: string) => {
-    if (status === 'Compliant') return 'badge-success';
-    if (status === 'Due Soon') return 'badge-warning';
+  const getStatusBadge = (cat: ComplianceCategory) => {
+    if (cat === 'Compliant') return 'badge-success';
+    if (cat === 'Due Soon') return 'badge-warning';
+    if (cat === 'Critical Soon') return 'badge-urgent';
     return 'badge-urgent';
   };
 
@@ -53,7 +62,7 @@ export default function Compliance() {
     }
 
     const item = state.compliance.find(c => c.id === renewModal.itemId);
-    const oldStatus = item ? getComplianceStatus(item) : 'Unknown';
+    const oldStatus = item ? getCategory(item.expiryDate) : 'Unknown';
     const oldExpiry = item?.expiryDate || '';
 
     updateComplianceItem(renewModal.itemId, {
@@ -74,41 +83,15 @@ export default function Compliance() {
     });
 
     // Resolve any related alerts
-    const relatedAlert = state.alerts.find(a => a.sourceRecordId === renewModal.itemId && !a.resolved);
-    if (relatedAlert) {
-      resolveAlert(relatedAlert.id);
-    }
+    const relatedAlerts = state.alerts.filter(a => a.sourceRecordId === renewModal.itemId && !a.resolved);
+    relatedAlerts.forEach(a => resolveAlert(a.id));
+
+    // Re-run alert engine to pick up resolved state
+    setTimeout(() => runAlertEngine(), 100);
 
     showToast(`${renewModal.staffName} — ${renewModal.itemType} renewed successfully`, 'success');
     setRenewModal(null);
   };
-
-  // Create alerts for expired/due soon items that don't have one yet
-  const checkAlerts = () => {
-    state.compliance.forEach(item => {
-      const status = getComplianceStatus(item);
-      if (status === 'Expired') {
-        createAlert({
-          type: 'Expired Credential',
-          severity: 'High',
-          message: `${item.staffName} — ${item.itemType} expired`,
-          sourceRecordType: 'Compliance',
-          sourceRecordId: item.id,
-        });
-      } else if (status === 'Due Soon') {
-        createAlert({
-          type: 'Due Soon',
-          severity: 'Medium',
-          message: `${item.staffName} — ${item.itemType} due soon (${item.expiryDate})`,
-          sourceRecordType: 'Compliance',
-          sourceRecordId: item.id,
-        });
-      }
-    });
-  };
-
-  // Check on first render
-  useState(() => { checkAlerts(); });
 
   return (
     <div>
@@ -118,28 +101,36 @@ export default function Compliance() {
             <ShieldCheck size={22} className="text-advisa-accent" />
             Compliance Tracker
           </h2>
-          <p className="text-xs text-slate-400 mt-1">{state.compliance.length} items tracked · {counts.expired} expired</p>
+          <p className="text-xs text-slate-400 mt-1">{state.compliance.length} items tracked · {counts.expired} expired · {counts.criticalSoon} critical soon</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
         <div className="stat-card" style={{ borderLeftWidth: '3px', borderLeftColor: '#059669' }}>
           <div className="flex items-center gap-2 mb-1"><CheckCircle size={15} className="text-emerald-600" /><p className="stat-label">Compliant</p></div>
           <p className="stat-value text-emerald-600">{counts.compliant}</p>
+          <p className="text-[10px] text-slate-400 mt-1">&gt; 90 days out</p>
         </div>
         <div className="stat-card" style={{ borderLeftWidth: '3px', borderLeftColor: '#d97706' }}>
           <div className="flex items-center gap-2 mb-1"><Clock size={15} className="text-amber-600" /><p className="stat-label">Due Soon</p></div>
           <p className="stat-value text-amber-600">{counts.dueSoon}</p>
+          <p className="text-[10px] text-slate-400 mt-1">31–90 days</p>
+        </div>
+        <div className="stat-card" style={{ borderLeftWidth: '3px', borderLeftColor: '#ea580c' }}>
+          <div className="flex items-center gap-2 mb-1"><AlertTriangle size={15} className="text-orange-600" /><p className="stat-label">Critical Soon</p></div>
+          <p className="stat-value text-orange-600">{counts.criticalSoon}</p>
+          <p className="text-[10px] text-slate-400 mt-1">0–30 days</p>
         </div>
         <div className="stat-card" style={{ borderLeftWidth: '3px', borderLeftColor: '#dc2626' }}>
           <div className="flex items-center gap-2 mb-1"><XCircle size={15} className="text-red-600" /><p className="stat-label">Expired</p></div>
           <p className="stat-value text-red-600">{counts.expired}</p>
+          <p className="text-[10px] text-red-500 mt-1">Blocks assignment</p>
         </div>
       </div>
 
       <div className="flex gap-3 mb-5 flex-wrap">
         <select className="select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-          <option value="All">All Statuses</option><option value="Compliant">Compliant</option><option value="Due Soon">Due Soon</option><option value="Expired">Expired</option>
+          <option value="All">All Statuses</option><option value="Compliant">Compliant</option><option value="Due Soon">Due Soon</option><option value="Critical Soon">Critical Soon</option><option value="Expired">Expired</option>
         </select>
         <select className="select" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
           <option value="All">All Types</option><option>RN License</option><option>LPN License</option><option>CNA License</option><option>CPR Certification</option>
@@ -154,6 +145,7 @@ export default function Compliance() {
               <th className="table-head">Staff Member</th>
               <th className="table-head">Item Type</th>
               <th className="table-head">Status</th>
+              <th className="table-head">Days Left</th>
               <th className="table-head">Expiry</th>
               <th className="table-head">Last Completed</th>
               <th className="table-head">Actions</th>
@@ -161,21 +153,28 @@ export default function Compliance() {
           </thead>
           <tbody>
             {filtered.map((item) => {
-              const status = getComplianceStatus(item);
+              const cat = getCategory(item.expiryDate);
+              const days = daysUntil(item.expiryDate);
+              const isHighlighted = highlightId === item.id;
               return (
-                <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                <tr key={item.id} id={`compliance-${item.id}`} className={`hover:bg-slate-50 transition-colors ${isHighlighted ? 'bg-sky-50 ring-2 ring-sky-300' : ''}`}>
                   <td className="table-cell font-semibold text-slate-800">{item.staffName}</td>
                   <td className="table-cell">{item.itemType}</td>
                   <td className="table-cell">
-                    <span className={`badge ${getStatusBadge(status)}`}>{status}</span>
+                    <span className={`badge ${getStatusBadge(cat)}`}>{cat}</span>
                   </td>
                   <td className="table-cell">
-                    <span className={status === 'Expired' ? 'text-red-600 font-semibold' : 'text-slate-500'}>{item.expiryDate}</span>
+                    <span className={`font-semibold ${days <= 0 ? 'text-red-600' : days <= 30 ? 'text-orange-600' : days <= 90 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                      {days <= 0 ? `${Math.abs(days)}d overdue` : `${days}d`}
+                    </span>
+                  </td>
+                  <td className="table-cell">
+                    <span className={cat === 'Expired' ? 'text-red-600 font-semibold' : 'text-slate-500'}>{item.expiryDate}</span>
                   </td>
                   <td className="table-cell text-slate-500">{item.lastCompleted}</td>
                   <td className="table-cell">
                     <div className="flex items-center gap-2">
-                      {status !== 'Compliant' && (
+                      {cat !== 'Compliant' && (
                         <button onClick={() => openRenewModal(item.id)} className="btn-primary text-xs py-1 px-2.5 gap-1">
                           <RefreshCw size={11} />Renew
                         </button>
@@ -202,15 +201,18 @@ export default function Compliance() {
           <div className="card mb-5 bg-sky-50/50 border-sky-200">
             <p className="section-title mb-3">{staff?.name || 'Unknown'} — All Compliance Items</p>
             <div className="space-y-2">
-              {staffItems.map(item => (
-                <div key={item.id} className="flex justify-between items-center text-sm p-2 bg-white rounded-lg">
-                  <span className="text-slate-700">{item.itemType}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400">{item.expiryDate}</span>
-                    <span className={`badge ${getStatusBadge(getComplianceStatus(item))}`}>{getComplianceStatus(item)}</span>
+              {staffItems.map(item => {
+                const cat = getCategory(item.expiryDate);
+                return (
+                  <div key={item.id} className="flex justify-between items-center text-sm p-2 bg-white rounded-lg">
+                    <span className="text-slate-700">{item.itemType}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400">{item.expiryDate}</span>
+                      <span className={`badge ${getStatusBadge(cat)}`}>{cat}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         );
@@ -258,8 +260,9 @@ export default function Compliance() {
       )}
 
       <div className="flex gap-5 mt-5 text-xs text-slate-500">
-        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />Compliant</div>
-        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-600" />Due Soon (≤45 days)</div>
+        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />Compliant (&gt;90 days)</div>
+        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-600" />Due Soon (31–90 days)</div>
+        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-600" />Critical Soon (0–30 days)</div>
         <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-600" />Expired</div>
       </div>
     </div>

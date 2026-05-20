@@ -1,10 +1,11 @@
 import { useAppState } from '../context/AppContext';
 import { useToast } from '../components/Toast';
 import type { Referral, ReferralStage, DemoDocument } from '../types';
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   ClipboardList, Plus, Search, Bot, FileText, ArrowRight, AlertTriangle,
-  Upload, LayoutGrid, List, X, Clock, CheckCircle,
+  Upload, LayoutGrid, List, X, Clock, CheckCircle, Timer, ShieldCheck,
 } from 'lucide-react';
 
 const STAGES: ReferralStage[] = ['New', 'Missing Docs', 'Eligibility', 'Staffing', 'Scheduled', 'Started', 'Declined'];
@@ -22,7 +23,19 @@ const stageBg: Record<string, string> = {
 export default function Referrals() {
   const { state, updateReferralStage, addAuditEntry, addReferral, uploadDocument, createAlert } = useAppState();
   const { showToast } = useToast();
-  const [selectedReferralId, setSelectedReferralId] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const deepLinkRef = searchParams.get('ref');
+  const [selectedReferralId, setSelectedReferralId] = useState<string | null>(deepLinkRef);
+
+  // Deep link: ?ref=r1 scrolls to that referral
+  useEffect(() => {
+    if (deepLinkRef) {
+      setTimeout(() => {
+        const el = document.getElementById(`referral-${deepLinkRef}`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+  }, [deepLinkRef]);
   const [filter, setFilter] = useState('');
   const [stageFilter, setStageFilter] = useState('All Stages');
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
@@ -295,6 +308,7 @@ export default function Referrals() {
                 {filtered.map((referral) => (
                   <tr
                     key={referral.id}
+                    id={`referral-${referral.id}`}
                     className={`cursor-pointer transition-colors ${selectedReferralId === referral.id ? 'bg-sky-50' : 'hover:bg-slate-50'}`}
                     onClick={() => setSelectedReferralId(referral.id)}
                   >
@@ -345,6 +359,25 @@ export default function Referrals() {
                     <div><p className="stat-label">Urgency</p><p className="font-medium text-slate-700 mt-0.5">{selectedReferral.urgency}</p></div>
                     <div><p className="stat-label">Stage</p><p className="font-medium text-slate-700 mt-0.5">{selectedReferral.stage}</p></div>
                     <div><p className="stat-label">Insurance</p><p className="font-medium text-slate-700 mt-0.5">{selectedReferral.insuranceStatus}</p></div>
+                  </div>
+
+                  {/* Readiness & SLA */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {selectedReferral.readiness && (
+                      <div className="p-2 bg-sky-50 border border-sky-200 rounded-lg text-xs">
+                        <p className="stat-label flex items-center gap-1"><ShieldCheck size={11} />Readiness</p>
+                        <p className={`font-semibold mt-0.5 ${selectedReferral.readiness === 'Missing Docs' ? 'text-red-600' : selectedReferral.readiness === 'Ready for SOC' ? 'text-emerald-600' : 'text-sky-600'}`}>{selectedReferral.readiness}</p>
+                      </div>
+                    )}
+                    {selectedReferral.slaDeadline && (
+                      <div className={`p-2 rounded-lg border text-xs ${selectedReferral.slaStatus === 'Breach' ? 'bg-red-50 border-red-200' : selectedReferral.slaStatus === 'Risk' ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                        <p className="stat-label flex items-center gap-1"><Timer size={11} />SLA</p>
+                        <p className={`font-semibold mt-0.5 ${selectedReferral.slaStatus === 'Breach' ? 'text-red-600' : selectedReferral.slaStatus === 'Risk' ? 'text-amber-600' : 'text-emerald-600'}`}>
+                          {selectedReferral.slaStatus || 'OK'}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Deadline: {new Date(selectedReferral.slaDeadline).toLocaleString()}</p>
+                      </div>
+                    )}
                   </div>
 
                   {summary.socDays && (

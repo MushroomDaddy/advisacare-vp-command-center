@@ -13,7 +13,8 @@ export default function FieldAssistant() {
     clockInVisit, clockOutVisit, createAlert, addOfflineQueueItem, syncOfflineItem,
   } = useAppState();
   const { showToast } = useToast();
-  const [selectedVisit, setSelectedVisit] = useState<string | null>(null);
+  const initVisitParam = new URLSearchParams(window.location.search).get('visit');
+  const [selectedVisit, setSelectedVisit] = useState<string | null>(initVisitParam);
   const [noteText, setNoteText] = useState('');
   const [showEscalation, setShowEscalation] = useState(false);
   const [escalationText, setEscalationText] = useState('');
@@ -89,13 +90,14 @@ export default function FieldAssistant() {
       return;
     }
 
-    // Check if all checklist items done
+    // Block End Visit if checklist is incomplete
     const allComplete = selectedVisitData.checklist.every(i => i.completed);
     if (!allComplete) {
-      showToast('Complete all checklist items before clocking out', 'warning');
+      showToast('Complete all checklist items before ending visit', 'error');
+      return;
     }
 
-    // Show signature modal
+    // Show signature modal — must capture signature OR file EVV exception
     setShowSignatureModal(true);
   };
 
@@ -157,7 +159,7 @@ export default function FieldAssistant() {
   const handleIncidentReport = () => {
     if (!incidentText.trim() || !selectedVisitData) return;
     const incident: Omit<QualityItem, 'id'> = {
-      type: 'Missed Visit',
+      type: 'Incident',
       patientInitials: selectedVisitData.patientInitials,
       dueDate: new Date().toISOString().split('T')[0],
       status: 'Open',
@@ -165,14 +167,23 @@ export default function FieldAssistant() {
       assignedTo: state.currentUser.name,
     };
     addIncidentReport(incident);
+
+    // Create alert for the incident
+    createAlert({
+      type: 'Incident', severity: 'High',
+      message: `Incident reported for ${selectedVisitData.patientInitials}: ${incidentText.slice(0, 80)}`,
+      sourceRecordType: 'Visit', sourceRecordId: selectedVisit || 'N/A',
+    });
+
     addAuditEntry({
       user: state.currentUser.name, role: state.currentUser.role,
       action: 'Created', recordType: 'Quality', recordId: selectedVisit || 'N/A',
       details: `INCIDENT REPORT: ${incidentText}`,
     });
+
     setIncidentText('');
     setShowIncident(false);
-    showToast('Incident report submitted to Quality team', 'info');
+    showToast('Incident report submitted — alert created', 'warning');
   };
 
   const handleRetrySync = () => {
@@ -232,6 +243,7 @@ export default function FieldAssistant() {
             {visibleVisits.map((visit) => (
               <div
                 key={visit.id}
+                id={`visit-${visit.id}`}
                 className={`p-3 border rounded-lg cursor-pointer transition-all ${
                   selectedVisit === visit.id
                     ? 'border-advisa-accent bg-sky-50/50 shadow-card-hover'

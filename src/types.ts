@@ -26,6 +26,23 @@ export type RecordType = 'Referral' | 'Staff' | 'Compliance' | 'Visit' | 'Qualit
 // --- Alerts ---
 export type AlertSeverity = 'Critical' | 'High' | 'Medium' | 'Low';
 
+export type AlertType =
+  | 'Expired Credential'
+  | 'Critical Soon Credential'
+  | 'Missing Documents'
+  | 'SLA Risk'
+  | 'SLA Breach'
+  | 'Open Shift'
+  | 'Catastrophic Uncovered Shift'
+  | 'EVV Exception'
+  | 'OASIS Rejected'
+  | 'HOPE Overdue'
+  | 'Partner Follow-up Overdue'
+  | 'Urgent Referral'
+  | 'Staffing'
+  | 'Quality'
+  | 'Incident';
+
 export interface Alert {
   id: string;
   type: string;
@@ -41,6 +58,8 @@ export interface Alert {
 }
 
 // --- Documents ---
+export type DocumentCategory = 'Physician Orders' | 'Discharge Summary' | 'Insurance Card' | 'Lab Results' | 'Power of Attorney' | 'Consent Form' | 'Other';
+
 export interface DemoDocument {
   id: string;
   referralId: string;
@@ -48,11 +67,13 @@ export interface DemoDocument {
   fileType: string;
   uploadedBy: string;
   uploadedAt: string;
-  category: 'Physician Orders' | 'Discharge Summary' | 'Insurance Card' | 'Lab Results' | 'Power of Attorney' | 'Consent Form' | 'Other';
+  category: DocumentCategory;
 }
 
 // --- Referrals ---
 export type ReferralStage = 'New' | 'Missing Docs' | 'Eligibility' | 'Staffing' | 'Scheduled' | 'Started' | 'Declined';
+
+export type ReferralReadiness = 'Missing Docs' | 'Ready for Eligibility' | 'Ready for Staffing' | 'Ready for SOC';
 
 export interface StageTimestamps {
   'New'?: string;
@@ -83,10 +104,25 @@ export interface Referral {
   declineReason?: string;
   assignedStaffId?: string;
   timeline: TimelineEntry[];
+  /** Computed readiness based on documents and stage */
+  readiness?: ReferralReadiness;
+  /** SLA deadline as ISO datetime (e.g. 48h from creation for Immediate) */
+  slaDeadline?: string;
+  /** Whether SLA is at risk or breached */
+  slaStatus?: 'OK' | 'Risk' | 'Breach';
 }
 
 export type ServiceType = 'Home Health' | 'Hospice' | 'Personal Care' | 'Therapy' | 'Catastrophic Injury Care';
 export type UrgencyLevel = 'Routine' | 'Urgent 24-48 hours' | 'Immediate';
+
+/** Required documents per service type */
+export const REQUIRED_DOCUMENTS: Record<ServiceType, DocumentCategory[]> = {
+  'Home Health': ['Physician Orders', 'Discharge Summary', 'Insurance Card'],
+  'Hospice': ['Physician Orders', 'Discharge Summary', 'Insurance Card', 'Consent Form'],
+  'Personal Care': ['Physician Orders', 'Insurance Card'],
+  'Therapy': ['Physician Orders', 'Lab Results', 'Insurance Card'],
+  'Catastrophic Injury Care': ['Physician Orders', 'Discharge Summary', 'Insurance Card', 'Consent Form'],
+};
 
 // --- Staff ---
 export type StaffRole = 'RN' | 'LPN' | 'HHA' | 'CNA' | 'PT' | 'OT' | 'ST';
@@ -125,12 +161,15 @@ export interface Shift {
 }
 
 // --- Compliance ---
+export type ComplianceCategory = 'Expired' | 'Critical Soon' | 'Due Soon' | 'Compliant';
+
 export interface ComplianceItem {
   id: string;
   staffId: string;
   staffName: string;
   itemType: 'RN License' | 'LPN License' | 'CNA License' | 'CPR Certification' | 'Background Check' | 'Drug Screen' | 'OSHA Training' | 'Confidentiality Ack';
-  status: 'Compliant' | 'Due Soon' | 'Expired';
+  /** Stored status — may be stale. Always recompute via getComplianceCategory(). */
+  status: 'Compliant' | 'Due Soon' | 'Expired' | 'Critical Soon';
   expiryDate: string;
   lastCompleted: string;
   proofDocumentId?: string;
@@ -160,6 +199,7 @@ export interface FieldVisit {
   signatureCaptured: boolean;
   evvException?: string;
   timeline: TimelineEntry[];
+  referralId?: string;
 }
 
 export interface OfflineQueueItem {
@@ -172,8 +212,8 @@ export interface OfflineQueueItem {
 }
 
 // --- Quality ---
-export type QualityType = 'OASIS Due' | 'OASIS Review' | 'QA Review' | 'Readmission Follow-up' | 'Hospice Comfort' | 'CAHPS Follow-up' | 'Missed Visit' | 'Late Note' | 'HOPE Assessment';
-export type QualityStatus = 'Open' | 'In Progress' | 'Resolved' | 'Rejected';
+export type QualityType = 'OASIS Due' | 'OASIS Review' | 'QA Review' | 'Readmission Follow-up' | 'Hospice Comfort' | 'CAHPS Follow-up' | 'Missed Visit' | 'Late Note' | 'HOPE Assessment' | 'Incident';
+export type QualityStatus = 'Open' | 'In Progress' | 'Resolved' | 'Rejected' | 'Submitted' | 'Accepted';
 
 export interface QualityItem {
   id: string;
@@ -184,6 +224,8 @@ export interface QualityItem {
   priority: 'High' | 'Medium' | 'Low';
   assignedTo: string;
   reviewNotes?: string;
+  /** For OASIS items: score value for QAO calculation */
+  oasisScore?: number;
 }
 
 // --- Referral Partners ---
@@ -225,6 +267,15 @@ export interface CatastrophicCase {
 
 // --- App State ---
 export type UserRole = 'VP' | 'Intake Coordinator' | 'Scheduler' | 'Field Staff' | 'Compliance Admin';
+
+/** Role → display name mapping for demo role switching */
+export const ROLE_NAMES: Record<UserRole, string> = {
+  'VP': 'VP User',
+  'Intake Coordinator': 'Sarah L.',
+  'Scheduler': 'Mike R.',
+  'Field Staff': 'Sarah Mitchell',
+  'Compliance Admin': 'Compliance Admin',
+};
 
 export interface ProductionReadinessItem {
   id: string;
