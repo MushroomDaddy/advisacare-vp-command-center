@@ -174,16 +174,37 @@ export function computeSlaStatus(referral: Referral): Referral['slaStatus'] {
   if (referral.stage === 'Started' || referral.stage === 'Declined') return 'OK';
   const hoursLeft = (new Date(referral.slaDeadline).getTime() - Date.now()) / (1000 * 60 * 60);
   if (hoursLeft <= 0) return 'Breach';
-  if (hoursLeft <= 12) return 'Risk';
+  if (hoursLeft <= 24) return 'Risk';
   return 'OK';
 }
 
 // --- 7) QAO calculation from OASIS assessments ---
+/**
+ * Demo OASIS Quality Score (QAO)
+ * Calculated as: (accepted OASIS assessments / submitted OASIS assessments) × 100
+ * Falls back to average oasisScore if no submitted/accepted status data available.
+ */
 export function calculateQAO(quality: QualityItem[]): number | null {
   const oasisItems = quality.filter(
-    q => (q.type === 'OASIS Due' || q.type === 'OASIS Review') && q.oasisScore !== undefined
+    q => q.type === 'OASIS Due' || q.type === 'OASIS Review'
   );
   if (oasisItems.length === 0) return null;
-  const total = oasisItems.reduce((sum, q) => sum + (q.oasisScore ?? 0), 0);
-  return Math.round(total / oasisItems.length);
+
+  // Primary: accepted/submitted ratio
+  const submitted = oasisItems.filter(q =>
+    q.status === 'Submitted' || q.status === 'Accepted' || q.status === 'Rejected' || q.status === 'Resolved'
+  ).length;
+  const accepted = oasisItems.filter(q =>
+    q.status === 'Accepted' || q.status === 'Resolved'
+  ).length;
+
+  if (submitted > 0) {
+    return Math.round((accepted / submitted) * 100);
+  }
+
+  // Fallback: average oasisScore
+  const scored = oasisItems.filter(q => q.oasisScore !== undefined);
+  if (scored.length === 0) return null;
+  const total = scored.reduce((sum, q) => sum + (q.oasisScore ?? 0), 0);
+  return Math.round(total / scored.length);
 }

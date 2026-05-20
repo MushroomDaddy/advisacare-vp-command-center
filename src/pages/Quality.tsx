@@ -194,7 +194,7 @@ export default function Quality() {
           <p className={`stat-value ${qaoScore !== null && qaoScore >= 80 ? 'text-emerald-600' : 'text-amber-600'}`}>
             {qaoScore !== null ? `${qaoScore}%` : 'N/A'}
           </p>
-          <p className="text-[10px] text-slate-400 mt-0.5">From OASIS assessments</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">Demo OASIS Quality Score</p>
         </div>
         <div className="stat-card">
           <p className="stat-label">HOPE Overdue</p>

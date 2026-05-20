@@ -426,7 +426,11 @@ export default function FieldAssistant() {
               <span className="text-xs text-slate-700">Patient/caregiver signature obtained</span>
             </label>
             <div className="flex gap-2">
-              <button onClick={handleSignatureComplete} className="btn-primary flex-1">
+              <button
+                onClick={handleSignatureComplete}
+                disabled={!signatureConfirmed}
+                className={`flex-1 ${signatureConfirmed ? 'btn-primary' : 'bg-slate-100 text-slate-400 cursor-not-allowed py-2 rounded-lg text-xs font-medium'}`}
+              >
                 Complete Visit
               </button>
               <button onClick={() => setShowEvvExceptionModal(true)} className="btn-secondary flex-1 text-amber-700">

@@ -244,11 +244,29 @@ export default function Compliance() {
                 <label className="stat-label block mb-1">Proof Document (optional)</label>
                 <div className="flex items-center gap-2">
                   <input type="text" className="input" placeholder="e.g. Certificate #12345" value={renewProof} onChange={e => setRenewProof(e.target.value)} />
-                  <button className="btn-secondary text-xs py-2 gap-1 flex-shrink-0" title="Demo only — no actual upload">
+                  <button
+                    className="btn-secondary text-xs py-2 gap-1 flex-shrink-0"
+                    onClick={() => {
+                      const demoMeta = {
+                        fileName: `proof_${renewModal?.itemType.toLowerCase().replace(/ /g, '_') || 'doc'}_${Date.now()}.pdf`,
+                        fileType: 'application/pdf',
+                        uploadedBy: state.currentUser.name,
+                        uploadedAt: new Date().toISOString(),
+                        category: 'Compliance Proof',
+                      };
+                      setRenewProof(JSON.stringify(demoMeta));
+                      showToast(`Demo proof attached: ${demoMeta.fileName}`, 'success');
+                    }}
+                  >
                     <Upload size={12} />Attach
                   </button>
                 </div>
-                <p className="text-[10px] text-amber-600 mt-1">⚠️ Demo mode — no files are actually stored</p>
+                {renewProof && renewProof.startsWith('{') && (
+                  <div className="mt-1 p-1.5 bg-emerald-50 rounded text-[10px] text-emerald-700">
+                    ✓ Proof attached: {JSON.parse(renewProof).fileName}
+                  </div>
+                )}
+                <p className="text-[10px] text-amber-600 mt-1">⚠️ Demo mode — metadata recorded, no files stored</p>
               </div>
             </div>
             <div className="flex gap-2 mt-5">

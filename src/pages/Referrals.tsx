@@ -1,6 +1,7 @@
 import { useAppState } from '../context/AppContext';
 import { useToast } from '../components/Toast';
 import type { Referral, ReferralStage, DemoDocument } from '../types';
+import { REQUIRED_DOCUMENTS } from '../types';
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -141,7 +142,7 @@ export default function Referrals() {
       documentsUploaded: 0,
       assignedCoordinator: state.currentUser.name,
       stage: 'New',
-      missingItems: ['Physician Orders', 'Discharge Summary', 'Insurance Card'],
+      missingItems: [...(REQUIRED_DOCUMENTS[newServiceType] || REQUIRED_DOCUMENTS['Home Health'])],
       createdAt: new Date().toISOString(),
       stageTimestamps: { New: new Date().toISOString() },
       timeline: [{ timestamp: new Date().toISOString(), action: 'Referral Created', user: state.currentUser.name }],
@@ -269,6 +270,14 @@ export default function Referrals() {
               <option>Routine</option><option>Urgent 24-48 hours</option><option>Immediate</option>
             </select>
             <input placeholder="Discharge Facility" className="input" value={newFacility} onChange={(e) => setNewFacility(e.target.value)} />
+          </div>
+          <div className="mt-3 p-2 bg-slate-50 border border-slate-200 rounded-lg">
+            <p className="stat-label mb-1">Required Documents for {newServiceType}</p>
+            <div className="flex flex-wrap gap-1">
+              {(REQUIRED_DOCUMENTS[newServiceType] || []).map(doc => (
+                <span key={doc} className="badge badge-neutral">{doc}</span>
+              ))}
+            </div>
           </div>
           <div className="mt-3 flex gap-2">
             <button className="btn-primary" onClick={handleNewReferral}>Submit Referral</button>

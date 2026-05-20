@@ -136,9 +136,10 @@ describe('QAO calculation', () => {
     { id: 'q2', type: 'OASIS Review', patientInitials: 'C.D.', dueDate: '2026-06-01', status: 'Accepted', priority: 'Medium', assignedTo: 'QA Lead', oasisScore: 75 },
     { id: 'q3', type: 'CAHPS Follow-up', patientInitials: 'E.F.', dueDate: '2026-06-01', status: 'Open', priority: 'Low', assignedTo: 'Nurse' },
   ];
-  it('calculates average from OASIS items only', () => {
+  it('calculates QAO from accepted/submitted ratio', () => {
     const qao = calculateQAO(quality);
-    expect(qao).toBe(80); // (85+75)/2
+    // Both OASIS items are Resolved/Accepted → 2/2 = 100%
+    expect(qao).toBe(100);
   });
   it('returns null when no OASIS items have scores', () => {
     expect(calculateQAO([quality[2]])).toBeNull();

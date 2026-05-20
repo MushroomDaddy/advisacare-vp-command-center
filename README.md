@@ -1,6 +1,8 @@
 # AdvisaCare VP Command Center
 
-A comprehensive executive dashboard for home health and hospice agency operations. Built as a **demo / prototype** with simulated data — no real PHI is processed or stored.
+> ⚠️ **DEMO / PROTOTYPE ONLY** — This application uses simulated data for demonstration purposes. No real patient information (PHI) is processed, stored, or transmitted. This is not a HIPAA-compliant system and is not suitable for production use with real patient data.
+
+A comprehensive executive dashboard for home health and hospice agency operations, showcasing workflow automation, alert-driven compliance, and role-based access control.
 
 ## Features
 

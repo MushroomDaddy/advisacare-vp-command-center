@@ -1,7 +1,8 @@
 import { useAppState } from '../context/AppContext';
 import { useToast } from '../components/Toast';
-import type { CatastrophicCase } from '../types';
-import { useState, useMemo } from 'react';
+import type { CatastrophicCase, ReferralStage } from '../types';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { hasBlockingCredential } from '../lib/complianceUtils';
 import {
   HeartPulse, AlertTriangle, Phone, Users, Wrench,
@@ -11,17 +12,29 @@ import {
 export default function CatastrophicCare() {
   const {
     state, updateCatastrophicCase, createShift, addAuditEntry, createAlert,
+    offerShift, acceptShift, resolveAlert, updateReferral,
   } = useAppState();
   const { showToast } = useToast();
+  const [searchParams] = useSearchParams();
+  const deepLinkCase = searchParams.get('case');
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(
-    state.catastrophicCases.length > 0 ? state.catastrophicCases[0].id : null
+    deepLinkCase || (state.catastrophicCases.length > 0 ? state.catastrophicCases[0].id : null)
   );
+
+  // Deep link: ?case=cc1 scrolls to that case
+  useEffect(() => {
+    if (deepLinkCase) {
+      setTimeout(() => {
+        const el = document.getElementById(`case-${deepLinkCase}`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 200);
+    }
+  }, [deepLinkCase]);
   const [showCreateShift, setShowCreateShift] = useState(false);
   const [newShiftDate, setNewShiftDate] = useState('');
   const [newShiftTime, setNewShiftTime] = useState('08:00-16:00');
   const [noteText, setNoteText] = useState('');
   const [showAssignModal, setShowAssignModal] = useState<string | null>(null);
-  const [overrideReason, setOverrideReason] = useState('');
 
   const selectedCase = useMemo(
     () => state.catastrophicCases.find(c => c.id === selectedCaseId),
@@ -79,27 +92,58 @@ export default function CatastrophicCare() {
     const staff = state.staff.find(s => s.id === staffId);
     if (!staff) return;
 
-    // Check for blocking credentials
-    if (hasBlockingCredential(staffId, state.compliance) && !overrideReason.trim()) {
-      showToast('Staff has expired credentials. Enter demo override reason to proceed.', 'error');
+    // Fully block expired credentials — no override
+    if (hasBlockingCredential(staffId, state.compliance)) {
+      showToast('Staff has expired credentials and cannot be assigned. Renew credentials first.', 'error');
       return;
     }
 
-    // Update shift
     const shift = state.shifts.find(s => s.id === shiftId);
     if (!shift || !selectedCase) return;
 
-    // Offer and accept in one step for catastrophic urgency
-    // This would normally be offer → accept flow
+    const beforeStatus = shift.status;
+
+    // 1. Offer + Accept the shift in one step (catastrophic urgency)
+    offerShift(shiftId, staffId, staff.name);
+    acceptShift(shiftId);
+
+    // 2. Update referral assignedStaffId and stage
+    if (selectedCase.referralId) {
+      updateReferral(selectedCase.referralId, { assignedStaffId: staffId, stage: 'Scheduled' as ReferralStage });
+    }
+
+    // 3. Update catastrophic case coverage status
+    const remainingUncovered = caseShifts.filter(s => s.id !== shiftId && s.status === 'Open');
+    const newCoverage = remainingUncovered.length === 0 ? 'Fully Covered' : 'Partially Covered';
+    updateCatastrophicCase(selectedCase.id, {
+      coverageStatus: newCoverage as CatastrophicCase['coverageStatus'],
+      incidents: [
+        ...selectedCase.incidents,
+        {
+          timestamp: new Date().toISOString(),
+          action: `Staff assigned: ${staff.name}`,
+          user: state.currentUser.name,
+          details: `${staff.name} (${staff.role}) assigned to shift ${shift.date} ${shift.time}`,
+        },
+      ],
+    });
+
+    // 4. Resolve uncovered shift alerts for this shift
+    state.alerts
+      .filter(a => !a.resolved && a.sourceRecordType === 'Shift' && a.sourceRecordId === shiftId)
+      .forEach(a => resolveAlert(a.id));
+
+    // 5. Audit entry with before/after
     addAuditEntry({
       user: state.currentUser.name, role: state.currentUser.role,
       action: 'Updated', recordType: 'Shift', recordId: shiftId,
-      details: `Assigned ${staff.name} to catastrophic shift${overrideReason ? ` (override: ${overrideReason})` : ''}`,
+      details: `Catastrophic assignment: ${staff.name} to ${selectedCase.patientInitials} shift ${shift.date}`,
+      before: `status: ${beforeStatus}, offeredTo: none`,
+      after: `status: Accepted, offeredTo: ${staff.name}, coverage: ${newCoverage}`,
     });
 
-    showToast(`${staff.name} assigned to shift`, 'success');
+    showToast(`${staff.name} assigned — shift accepted, coverage: ${newCoverage}`, 'success');
     setShowAssignModal(null);
-    setOverrideReason('');
   };
 
   const handleAddNote = () => {
@@ -159,6 +203,7 @@ export default function CatastrophicCare() {
             {state.catastrophicCases.map(cc => (
               <div
                 key={cc.id}
+                id={`case-${cc.id}`}
                 className={`card cursor-pointer transition-all ${selectedCaseId === cc.id ? 'ring-2 ring-red-400' : 'hover:shadow-card-hover'}`}
                 onClick={() => setSelectedCaseId(cc.id)}
               >
@@ -343,17 +388,14 @@ export default function CatastrophicCare() {
                     </div>
                     <button
                       onClick={() => handleAssignStaff(showAssignModal, s.id)}
-                      className="btn-primary text-xs py-1"
+                      disabled={blocked}
+                      className={`text-xs py-1 ${blocked ? 'bg-slate-100 text-slate-400 cursor-not-allowed px-3 rounded-lg' : 'btn-primary'}`}
                     >
-                      <ChevronRight size={12} />Assign
+                      <ChevronRight size={12} />{blocked ? 'Blocked' : 'Assign'}
                     </button>
                   </div>
                 );
               })}
-            </div>
-            <div className="mb-3">
-              <label className="stat-label block mb-1">Override Reason (for expired credentials)</label>
-              <input className="input" placeholder="Demo override reason..." value={overrideReason} onChange={e => setOverrideReason(e.target.value)} />
             </div>
             <button onClick={() => setShowAssignModal(null)} className="btn-secondary w-full">Cancel</button>
           </div>

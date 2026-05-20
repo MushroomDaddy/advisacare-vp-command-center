@@ -18,7 +18,7 @@ export default function Staffing() {
   const [newShiftReferral, setNewShiftReferral] = useState('');
   const [newShiftDate, setNewShiftDate] = useState(new Date().toISOString().split('T')[0]);
   const [newShiftTime, setNewShiftTime] = useState('08:00-16:00');
-  const [overrideReason] = useState('');
+  // Expired credentials fully blocked — no override
   const [searchParams] = useSearchParams();
   const deepLinkShift = searchParams.get('shift');
   const [activeTab, setActiveTab] = useState<'staff' | 'shifts'>(deepLinkShift ? 'shifts' : 'staff');
@@ -74,8 +74,8 @@ export default function Staffing() {
   };
 
   const handleOfferShift = (shiftId: string, staffId: string) => {
-    if (hasExpiredCredentials(staffId) && !overrideReason.trim()) {
-      showToast('Staff has expired credentials. Enter a demo override reason to proceed, or renew credentials first.', 'error');
+    if (hasExpiredCredentials(staffId)) {
+      showToast('Staff has expired credentials and cannot be assigned. Renew credentials first.', 'error');
       return;
     }
     const staff = state.staff.find(s => s.id === staffId);
@@ -291,7 +291,7 @@ export default function Staffing() {
                 </div>
                 {expired && (
                   <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-center gap-2">
-                    <AlertTriangle size={12} />This staff member has expired credentials and cannot be assigned to shifts until renewed.
+                    <AlertTriangle size={12} />This staff member has expired credentials and is blocked from all shift assignments until renewed.
                   </div>
                 )}
               </div>

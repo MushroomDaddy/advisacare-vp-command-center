@@ -94,10 +94,21 @@ function genId(prefix: string = '') {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(getInitialState);
 
-  // Persist to localStorage on every state change
+  // Persist to localStorage on every state change & auto-reconcile alerts
   useEffect(() => {
     saveState(state);
   }, [state]);
+
+  // Auto-reconcile alerts whenever state changes that could affect them
+  const reconcileNow = useCallback(() => {
+    setState(prev => {
+      const derived = deriveAlerts(prev);
+      const reconciled = reconcileAlerts(prev.alerts, derived);
+      // Only update if alerts actually changed to avoid infinite loop
+      if (JSON.stringify(reconciled) === JSON.stringify(prev.alerts)) return prev;
+      return { ...prev, alerts: reconciled };
+    });
+  }, []);
 
   // --- Audit helper ---
   const addAuditEntry = useCallback((entry: Omit<AuditEntry, 'id' | 'timestamp'>) => {
@@ -195,7 +206,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return updated;
       }),
     }));
-  }, []);
+    setTimeout(reconcileNow, 50);
+  }, [reconcileNow]);
 
   const updateReferral = useCallback((id: string, updates: Partial<Referral>) => {
     setState(prev => ({
@@ -228,7 +240,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...prev,
       compliance: prev.compliance.map(c => c.id === id ? { ...c, ...updates } : c),
     }));
-  }, []);
+    setTimeout(reconcileNow, 50);
+  }, [reconcileNow]);
 
   // --- Visits ---
   const updateVisitChecklist = useCallback((visitId: string, taskIndex: number) => {
@@ -285,7 +298,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         };
       }),
     }));
-  }, []);
+    setTimeout(reconcileNow, 50);
+  }, [reconcileNow]);
 
   const updateVisit = useCallback((id: string, updates: Partial<FieldVisit>) => {
     setState(prev => ({
@@ -304,7 +318,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...prev,
       quality: prev.quality.map(q => q.id === id ? { ...q, status, ...(reviewNotes !== undefined ? { reviewNotes } : {}) } : q),
     }));
-  }, []);
+    setTimeout(reconcileNow, 50);
+  }, [reconcileNow]);
 
   const updateQualityItem = useCallback((id: string, updates: Partial<QualityItem>) => {
     setState(prev => ({
@@ -318,7 +333,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...prev,
       quality: [...prev.quality, { id: genId('q'), ...item }],
     }));
-  }, []);
+    setTimeout(reconcileNow, 50);
+  }, [reconcileNow]);
 
   // --- Partners ---
   const addPartner = useCallback((partner: ReferralPartner) => {
@@ -330,7 +346,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...prev,
       partners: prev.partners.map(p => p.id === id ? { ...p, ...updates } : p),
     }));
-  }, []);
+    setTimeout(reconcileNow, 50);
+  }, [reconcileNow]);
 
   // --- Shifts (createShift now returns the new ID) ---
   const createShift = useCallback((shift: Omit<Shift, 'id' | 'createdAt'>): string => {
@@ -356,7 +373,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         s.id === shiftId ? { ...s, status: 'Offered' as ShiftStatus, offeredTo: staffId, offeredToName: staffName } : s
       ),
     }));
-  }, []);
+    setTimeout(reconcileNow, 50);
+  }, [reconcileNow]);
 
   const acceptShift = useCallback((shiftId: string) => {
     setState(prev => {
@@ -437,7 +455,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         alerts: updatedAlerts,
       };
     });
-  }, []);
+    setTimeout(reconcileNow, 50);
+  }, [reconcileNow]);
 
   const declineShift = useCallback((shiftId: string) => {
     setState(prev => ({
@@ -446,7 +465,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         s.id === shiftId ? { ...s, status: 'Open' as ShiftStatus, offeredTo: undefined, offeredToName: undefined } : s
       ),
     }));
-  }, []);
+    setTimeout(reconcileNow, 50);
+  }, [reconcileNow]);
 
   // --- Documents (comprehensive update on upload) ---
   const uploadDocument = useCallback((doc: Omit<DemoDocument, 'id' | 'uploadedAt'>) => {
@@ -492,7 +512,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         referrals: newReferrals,
       };
     });
-  }, []);
+    setTimeout(reconcileNow, 50);
+  }, [reconcileNow]);
 
   // --- Catastrophic Care ---
   const updateCatastrophicCase = useCallback((id: string, updates: Partial<CatastrophicCase>) => {
@@ -500,7 +521,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...prev,
       catastrophicCases: prev.catastrophicCases.map(c => c.id === id ? { ...c, ...updates } : c),
     }));
-  }, []);
+    setTimeout(reconcileNow, 50);
+  }, [reconcileNow]);
 
   const addCatastrophicCase = useCallback((c: CatastrophicCase) => {
     setState(prev => ({

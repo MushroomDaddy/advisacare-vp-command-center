@@ -73,7 +73,7 @@ export function deriveAlerts(state: AppState): DerivedAlert[] {
           sourceRecordType: 'Referral',
           sourceRecordId: ref.id,
         });
-      } else if (hoursLeft <= 12) {
+      } else if (hoursLeft <= 24) {
         derived.push({
           type: 'SLA Risk',
           severity: 'High',

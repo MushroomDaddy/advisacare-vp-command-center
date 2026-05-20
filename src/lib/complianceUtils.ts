@@ -3,8 +3,8 @@
  * Every component must use getComplianceCategory() instead of trusting stored status.
  *
  * Categories:
- *   Expired      — expiryDate is before today (days <= 0)
- *   Critical Soon — 0 < days <= 30
+ *   Expired      — expiryDate is before today (days < 0)
+ *   Critical Soon — 0 <= days <= 30
  *   Due Soon     — 31 <= days <= 90
  *   Compliant    — days > 90
  */
@@ -22,7 +22,7 @@ export function daysUntil(dateStr: string): number {
 /** Canonical compliance status — never trust stored `status` field. */
 export function getComplianceCategory(expiryDate: string): ComplianceCategory {
   const days = daysUntil(expiryDate);
-  if (days <= 0) return 'Expired';
+  if (days < 0) return 'Expired';
   if (days <= 30) return 'Critical Soon';
   if (days <= 90) return 'Due Soon';
   return 'Compliant';
