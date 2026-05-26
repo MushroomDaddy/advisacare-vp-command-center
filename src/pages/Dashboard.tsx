@@ -47,11 +47,10 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   // Wall-clock "now" lives in state and is refreshed every minute via effect.
-  // This keeps render pure (no Date.now() at render time) while still giving
-  // the 24-hour-window KPI a rolling reference point.
-  const [now, setNow] = useState<number>(0);
+  // Wall-clock "now" — lazy initializer runs once on mount (pure), then the
+  // interval keeps it rolling every 60 s without a synchronous setState in the effect.
+  const [now, setNow] = useState<number>(() => Date.now());
   useEffect(() => {
-    setNow(Date.now());
     const id = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(id);
   }, []);
