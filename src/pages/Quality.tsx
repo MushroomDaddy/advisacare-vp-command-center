@@ -1,7 +1,7 @@
 import { useAppState } from '../context/AppContext';
 import { useToast } from '../components/Toast';
-import type { QualityStatus } from '../types';
-import { useState, useMemo, useEffect, useRef } from 'react';
+import type { QualityItem, QualityStatus } from '../types';
+import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { calculateQAO, summarizeOasisCounts } from '../utils/dataLogic';
 import {
@@ -13,56 +13,54 @@ const STATUS_OPTIONS: QualityStatus[] = ['Open', 'In Progress', 'Submitted', 'Ac
 
 type QualityTab = 'watchboard' | 'oasis' | 'hope' | 'cahps';
 
+/**
+ * Outer wrapper: reads ?qid= from the URL, computes the tab the deep-linked
+ * item belongs to, and remounts QualityInner (via `key={deepLinkQid}`) on
+ * every URL change. Inner state is initialised from the URL, so we never
+ * mutate refs or call setState during render.
+ */
 export default function Quality() {
-  const { state, updateQualityStatus, updateQualityItem, addAuditEntry, createAlert, resolveAlert, runAlertEngine } = useAppState();
-  const { showToast } = useToast();
+  const { state } = useAppState();
   const [searchParams] = useSearchParams();
   const deepLinkQid = searchParams.get('qid');
-  const highlightId = deepLinkQid;
 
-  // Derive the tab from the deep link (no setState-in-effect). The user can
-  // still override locally via tab clicks — tracked as userTab. We reset the
-  // override synchronously during render whenever the URL changes (the same
-  // pattern React's docs call out for "adjusting state on prop change").
-  const deepLinkTab = useMemo<QualityTab | null>(() => {
-    if (!deepLinkQid) return null;
-    const item = state.quality.find(q => q.id === deepLinkQid);
-    if (!item) return null;
+  const deepLinkTab = useMemo<QualityTab>(() => {
+    if (!deepLinkQid) return 'watchboard';
+    const item: QualityItem | undefined = state.quality.find(q => q.id === deepLinkQid);
+    if (!item) return 'watchboard';
     if (item.type === 'OASIS Due' || item.type === 'OASIS Review') return 'oasis';
     if (item.type === 'HOPE Assessment') return 'hope';
     if (item.type === 'CAHPS Follow-up') return 'cahps';
     return 'watchboard';
   }, [deepLinkQid, state.quality]);
 
-  const [userTab, setUserTab] = useState<QualityTab>('watchboard');
-  const [userFilterType, setUserFilterType] = useState('All');
-  const [userFilterStatus, setUserFilterStatus] = useState('All');
-  const [userFilterPriority, setUserFilterPriority] = useState('All');
-  const [userExpandedItem, setUserExpandedItem] = useState<string | null>(null);
+  return (
+    <QualityInner
+      key={deepLinkQid ?? '__none__'}
+      deepLinkQid={deepLinkQid}
+      initialTab={deepLinkTab}
+    />
+  );
+}
 
-  const lastDeepLinkRef = useRef<string | null>(deepLinkQid);
-  if (lastDeepLinkRef.current !== deepLinkQid) {
-    lastDeepLinkRef.current = deepLinkQid;
-    // Reset local overrides when the URL deep link changes (sync, in render).
-    if (deepLinkQid && deepLinkTab) {
-      setUserTab(deepLinkTab);
-      setUserFilterType('All');
-      setUserFilterStatus('All');
-      setUserFilterPriority('All');
-      setUserExpandedItem(deepLinkQid);
-    }
-  }
+interface QualityInnerProps {
+  deepLinkQid: string | null;
+  initialTab: QualityTab;
+}
 
-  const activeTab = userTab;
-  const filterType = userFilterType;
-  const filterStatus = userFilterStatus;
-  const filterPriority = userFilterPriority;
-  const expandedItem = userExpandedItem;
-  const setActiveTab = setUserTab;
-  const setFilterType = setUserFilterType;
-  const setFilterStatus = setUserFilterStatus;
-  const setFilterPriority = setUserFilterPriority;
-  const setExpandedItem = setUserExpandedItem;
+function QualityInner({ deepLinkQid, initialTab }: QualityInnerProps) {
+  const { state, updateQualityStatus, updateQualityItem, addAuditEntry, createAlert, resolveAlert, runAlertEngine } = useAppState();
+  const { showToast } = useToast();
+  const highlightId = deepLinkQid;
+
+  // Inner state initialised from the URL on first mount. The outer wrapper's
+  // key={deepLinkQid} forces a re-mount on URL change so these defaults
+  // re-apply automatically — no in-render setState, no refs.
+  const [activeTab, setActiveTab] = useState<QualityTab>(initialTab);
+  const [filterType, setFilterType] = useState('All');
+  const [filterStatus, setFilterStatus] = useState('All');
+  const [filterPriority, setFilterPriority] = useState('All');
+  const [expandedItem, setExpandedItem] = useState<string | null>(deepLinkQid);
 
   const [editReviewerItem, setEditReviewerItem] = useState<string | null>(null);
   const [editReviewerText, setEditReviewerText] = useState('');

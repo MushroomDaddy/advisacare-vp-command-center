@@ -29,37 +29,40 @@ export default function Donut({
   const total = slices.reduce((s, x) => s + x.value, 0);
   const r = size / 2 - thickness / 2 - 2;
   const c = 2 * Math.PI * r;
-  let offset = 0;
+
+  // Precompute dash lengths and their cumulative offsets — no mutable state
+  // during render, so the react-hooks purity lint is happy.
+  const dashes = slices.map(s => (total > 0 ? (s.value / total) * c : 0));
+  const offsets = dashes.reduce<number[]>((acc, _d, i) => {
+    acc.push(i === 0 ? 0 : acc[i - 1] + dashes[i - 1]);
+    return acc;
+  }, []);
 
   // Default center: percentage of the first slice (e.g. % compliant)
-  let center = centerValue;
-  if (!center && total > 0 && slices.length > 0) {
-    center = `${Math.round((slices[0].value / total) * 100)}%`;
-  }
+  const computedCenter =
+    centerValue ??
+    (total > 0 && slices.length > 0
+      ? `${Math.round((slices[0].value / total) * 100)}%`
+      : undefined);
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img">
       <g transform={`translate(${size / 2} ${size / 2}) rotate(-90)`}>
         {/* Track */}
         <circle r={r} fill="none" stroke="#F0F5F3" strokeWidth={thickness} />
-        {slices.map((s, i) => {
-          const dash = total > 0 ? (s.value / total) * c : 0;
-          const el = (
-            <circle
-              key={i}
-              r={r}
-              fill="none"
-              stroke={s.color}
-              strokeWidth={thickness}
-              strokeDasharray={`${dash} ${c}`}
-              strokeDashoffset={-offset}
-            />
-          );
-          offset += dash;
-          return el;
-        })}
+        {slices.map((s, i) => (
+          <circle
+            key={i}
+            r={r}
+            fill="none"
+            stroke={s.color}
+            strokeWidth={thickness}
+            strokeDasharray={`${dashes[i]} ${c}`}
+            strokeDashoffset={-offsets[i]}
+          />
+        ))}
       </g>
-      {center && (
+      {computedCenter && (
         <text
           x={size / 2}
           y={size / 2 - 6}
@@ -70,7 +73,7 @@ export default function Donut({
           fill="#04363B"
           className="tabular-nums"
         >
-          {center}
+          {computedCenter}
         </text>
       )}
       {centerLabel && (

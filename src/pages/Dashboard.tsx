@@ -13,7 +13,7 @@
  *   └─────────────────┴────────────────────────────────────────┘
  */
 import { useAppState } from '../context/AppContext';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getComplianceCategory } from '../lib/complianceUtils';
 import { AlertTriangle, ArrowRight, Plus, Download } from 'lucide-react';
@@ -46,6 +46,16 @@ export default function Dashboard() {
   const { state } = useAppState();
   const navigate = useNavigate();
 
+  // Wall-clock "now" lives in state and is refreshed every minute via effect.
+  // This keeps render pure (no Date.now() at render time) while still giving
+  // the 24-hour-window KPI a rolling reference point.
+  const [now, setNow] = useState<number>(0);
+  useEffect(() => {
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
   const stats = useMemo(() => {
     const urgentReferrals = state.referrals.filter(r => r.urgency === 'Immediate' && r.stage !== 'Declined');
     const missingDocs = state.referrals.filter(r => r.stage === 'Missing Docs');
@@ -68,9 +78,12 @@ export default function Dashboard() {
       .map(r => (new Date(r.stageTimestamps['Started']!).getTime() - new Date(r.stageTimestamps['New']!).getTime()) / (1000 * 60 * 60 * 24));
     const avgSOC = socTimes.length > 0 ? (socTimes.reduce((a, b) => a + b, 0) / socTimes.length).toFixed(1) : 'N/A';
 
-    // New referrals in last 24h (for the first KPI card)
-    const since24h = Date.now() - 24 * 60 * 60 * 1000;
-    const newReferrals24h = state.referrals.filter(r => new Date(r.createdAt).getTime() >= since24h).length;
+    // New referrals in last 24h (rolling, based on the ticking `now` state).
+    // Until the first effect runs (`now === 0`), report 0 — flickers once.
+    const since24h = now - 24 * 60 * 60 * 1000;
+    const newReferrals24h = now === 0
+      ? 0
+      : state.referrals.filter(r => new Date(r.createdAt).getTime() >= since24h).length;
 
     // Active (non-terminal) referrals
     const active = state.referrals.filter(r => r.stage !== 'Declined' && r.stage !== 'Started');
@@ -85,7 +98,7 @@ export default function Dashboard() {
       openQuality, criticalAlerts, unacknowledgedAlerts, avgSOC, active, overduePartners,
       newReferrals24h,
     };
-  }, [state]);
+  }, [state, now]);
 
   // Pipeline distribution for referrals
   const pipelineStages: Array<{ stage: string; emphasis?: boolean }> = [
@@ -132,10 +145,13 @@ export default function Dashboard() {
     return [0.5, 0.6, 0.7, 0.65, 0.78, 0.82, 0.88, 0.94, 1].map(k => Math.round(seed * k));
   };
 
-  // Eyebrow: weekday, month, day
-  const today = new Date().toLocaleDateString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric',
-  });
+  // Eyebrow: weekday, month, day — derived from the ticking `now` state so
+  // render stays pure. `now === 0` falls back to "Loading…" for one tick.
+  const today = now === 0
+    ? ' '
+    : new Date(now).toLocaleDateString('en-US', {
+        weekday: 'long', month: 'long', day: 'numeric',
+      });
 
   return (
     <div>

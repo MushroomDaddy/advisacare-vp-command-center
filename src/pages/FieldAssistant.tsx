@@ -1,38 +1,40 @@
 import { useAppState } from '../context/AppContext';
 import { useToast } from '../components/Toast';
 import type { QualityItem } from '../types';
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Smartphone, Clock, MapPin, CheckCircle, Save, AlertTriangle, FileText,
   ChevronRight, Play, Square, Pen, WifiOff, RefreshCw, Wifi,
 } from 'lucide-react';
 
+/**
+ * Outer wrapper: reads ?visit= from the URL and remounts FieldAssistantInner
+ * (via `key={deepLinkVisit}`) whenever it changes. This is the cleanest
+ * lint-friendly way to react to query-param changes on an already-mounted
+ * page — no setState in useEffect, no ref mutation during render.
+ */
 export default function FieldAssistant() {
+  const [searchParams] = useSearchParams();
+  const deepLinkVisit = searchParams.get('visit');
+  return (
+    <FieldAssistantInner
+      key={deepLinkVisit ?? '__none__'}
+      deepLinkVisit={deepLinkVisit}
+    />
+  );
+}
+
+function FieldAssistantInner({ deepLinkVisit }: { deepLinkVisit: string | null }) {
   const {
     state, updateVisitChecklist, updateVisitNotes, addIncidentReport, addAuditEntry,
     clockInVisit, clockOutVisit, createAlert, addOfflineQueueItem, syncOfflineItem,
   } = useAppState();
   const { showToast } = useToast();
-  // Fix #2: react to ?visit= changes even when this page is already mounted.
-  // The deep link is the source of truth; local clicks are tracked as a
-  // separate override so we never have to setState inside useEffect.
-  const [searchParams] = useSearchParams();
-  const deepLinkVisit = searchParams.get('visit');
-  const [userSelection, setUserSelection] = useState<string | null>(null);
-  // When the URL changes, the override is cleared by deriving from the
-  // composite of (override, deep link). useMemo recomputes the chosen visit
-  // each render — no setState-in-effect needed.
-  const lastDeepLinkRef = useRef<string | null>(deepLinkVisit);
-  if (lastDeepLinkRef.current !== deepLinkVisit) {
-    lastDeepLinkRef.current = deepLinkVisit;
-    // Reset the override synchronously during render when the URL changes.
-    // Safe — this is the same pattern React's docs recommend for derived
-    // state ("Adjusting state based on previous state during render").
-    if (userSelection !== null) setUserSelection(null);
-  }
-  const selectedVisit = userSelection ?? deepLinkVisit;
-  const setSelectedVisit = (id: string | null) => setUserSelection(id);
+  // selectedVisit is initialised from the deep link (the outer wrapper's
+  // key forces a fresh mount when ?visit= changes, so this initial value
+  // tracks the URL without any in-render setState).
+  const [selectedVisit, setSelectedVisit] = useState<string | null>(deepLinkVisit);
 
   // Effect only does side effects (scroll), never setState.
   useEffect(() => {
