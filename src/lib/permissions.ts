@@ -23,6 +23,7 @@ export const allRoutes: RouteConfig[] = [
   { path: '/referral-partners', label: 'Partners', icon: 'Handshake', roles: ['VP', 'Intake Coordinator'] },
   { path: '/settings', label: 'Settings', icon: 'Settings', roles: ['VP', 'Intake Coordinator', 'Scheduler', 'Field Staff', 'Compliance Admin'] },
   { path: '/audit-log', label: 'Audit Log', icon: 'FileSearch', roles: ['VP', 'Compliance Admin', 'Intake Coordinator'] },
+  { path: '/security-checklist', label: 'Security & HIPAA', icon: 'Lock', roles: ['VP', 'Compliance Admin'] },
 ];
 
 export function canAccessRoute(path: string, role: UserRole): boolean {
