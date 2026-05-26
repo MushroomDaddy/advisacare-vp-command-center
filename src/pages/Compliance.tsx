@@ -1,6 +1,6 @@
 import { useAppState } from '../context/AppContext';
 import { useToast } from '../components/Toast';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getComplianceCategory, daysUntil } from '../lib/complianceUtils';
 import type { ComplianceCategory } from '../types';
@@ -10,6 +10,17 @@ interface RenewModalData {
   itemId: string;
   staffName: string;
   itemType: string;
+}
+
+/** Demo proof metadata produced by the "Attach" button. Stored as a structured
+ *  object (not stuffed into a JSON-encoded string) so user-typed text in the
+ *  proof field cannot crash the renderer. Fix #5. */
+interface DemoProofMeta {
+  fileName: string;
+  fileType: string;
+  uploadedBy: string;
+  uploadedAt: string;
+  category: string;
 }
 
 export default function Compliance() {
@@ -22,7 +33,18 @@ export default function Compliance() {
   const [renewModal, setRenewModal] = useState<RenewModalData | null>(null);
   const [renewDate, setRenewDate] = useState('');
   const [renewProof, setRenewProof] = useState('');
+  /** Fix #5: separate state for demo proof metadata — never parsed from user input */
+  const [proofMeta, setProofMeta] = useState<DemoProofMeta | null>(null);
   const highlightId = searchParams.get('item');
+
+  // Fix #2: reactively scroll/highlight even when already mounted
+  useEffect(() => {
+    if (!highlightId) return;
+    const el = document.getElementById(`compliance-${highlightId}`);
+    if (el) {
+      setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+    }
+  }, [highlightId]);
 
   const getCategory = (expiryDate: string): ComplianceCategory => getComplianceCategory(expiryDate);
 
@@ -52,7 +74,25 @@ export default function Compliance() {
     defaultDate.setFullYear(defaultDate.getFullYear() + 1);
     setRenewDate(defaultDate.toISOString().split('T')[0]);
     setRenewProof('');
+    setProofMeta(null);
     setRenewModal({ itemId, staffName: item.staffName, itemType: item.itemType });
+  };
+
+  /** Returns the day-count cell content for a compliance row.
+   *  Fix #4: today should read "expires today", not "0d overdue". */
+  const renderDaysCell = (days: number) => {
+    if (days < 0) {
+      const cls = 'text-red-600 font-semibold';
+      return <span className={cls}>{Math.abs(days)}d overdue</span>;
+    }
+    if (days === 0) {
+      const cls = 'text-orange-600 font-semibold';
+      return <span className={cls}>expires today</span>;
+    }
+    const cls = days <= 30 ? 'text-orange-600 font-semibold'
+              : days <= 90 ? 'text-amber-600 font-semibold'
+              : 'text-emerald-600 font-semibold';
+    return <span className={cls}>{days}d</span>;
   };
 
   const handleRenewSubmit = () => {
@@ -71,13 +111,20 @@ export default function Compliance() {
       lastCompleted: new Date().toISOString().split('T')[0],
     });
 
+    // Build proof detail without ever JSON.parse-ing user input.
+    // proofMeta is structured demo state; renewProof is free text typed by the user.
+    const proofParts: string[] = [];
+    if (renewProof.trim()) proofParts.push(`ref: ${renewProof.trim()}`);
+    if (proofMeta) proofParts.push(`file: ${proofMeta.fileName}`);
+    const proofDetail = proofParts.length > 0 ? `, proof: { ${proofParts.join('; ')} }` : '';
+
     addAuditEntry({
       user: state.currentUser.name,
       role: state.currentUser.role,
       action: 'Updated',
       recordType: 'Compliance',
       recordId: renewModal.itemId,
-      details: `Renewal completed for ${renewModal.staffName} — ${renewModal.itemType}${renewProof ? `, proof: ${renewProof}` : ''}, new expiry: ${renewDate}`,
+      details: `Renewal completed for ${renewModal.staffName} — ${renewModal.itemType}${proofDetail}, new expiry: ${renewDate}`,
       before: `status: ${oldStatus}, expiryDate: ${oldExpiry}`,
       after: `status: Compliant, expiryDate: ${renewDate}`,
     });
@@ -163,10 +210,8 @@ export default function Compliance() {
                   <td className="table-cell">
                     <span className={`badge ${getStatusBadge(cat)}`}>{cat}</span>
                   </td>
-                  <td className="table-cell">
-                    <span className={`font-semibold ${days <= 0 ? 'text-red-600' : days <= 30 ? 'text-orange-600' : days <= 90 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                      {days <= 0 ? `${Math.abs(days)}d overdue` : `${days}d`}
-                    </span>
+                  <td className="table-cell" data-testid={`days-${item.id}`}>
+                    {renderDaysCell(days)}
                   </td>
                   <td className="table-cell">
                     <span className={cat === 'Expired' ? 'text-red-600 font-semibold' : 'text-slate-500'}>{item.expiryDate}</span>
@@ -243,27 +288,36 @@ export default function Compliance() {
               <div>
                 <label className="stat-label block mb-1">Proof Document (optional)</label>
                 <div className="flex items-center gap-2">
-                  <input type="text" className="input" placeholder="e.g. Certificate #12345" value={renewProof} onChange={e => setRenewProof(e.target.value)} />
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder="e.g. Certificate #12345"
+                    value={renewProof}
+                    onChange={e => setRenewProof(e.target.value)}
+                    aria-label="Proof reference (free text)"
+                  />
                   <button
+                    type="button"
                     className="btn-secondary text-xs py-2 gap-1 flex-shrink-0"
                     onClick={() => {
-                      const demoMeta = {
+                      const demoMeta: DemoProofMeta = {
                         fileName: `proof_${renewModal?.itemType.toLowerCase().replace(/ /g, '_') || 'doc'}_${Date.now()}.pdf`,
                         fileType: 'application/pdf',
                         uploadedBy: state.currentUser.name,
                         uploadedAt: new Date().toISOString(),
                         category: 'Compliance Proof',
                       };
-                      setRenewProof(JSON.stringify(demoMeta));
+                      setProofMeta(demoMeta);
                       showToast(`Demo proof attached: ${demoMeta.fileName}`, 'success');
                     }}
                   >
                     <Upload size={12} />Attach
                   </button>
                 </div>
-                {renewProof && renewProof.startsWith('{') && (
-                  <div className="mt-1 p-1.5 bg-emerald-50 rounded text-[10px] text-emerald-700">
-                    ✓ Proof attached: {JSON.parse(renewProof).fileName}
+                {/* Fix #5: render from structured state, never parse the free-text proof field */}
+                {proofMeta && (
+                  <div className="mt-1 p-1.5 bg-emerald-50 rounded text-[10px] text-emerald-700" data-testid="proof-attached">
+                    ✓ Proof attached: {proofMeta.fileName}
                   </div>
                 )}
                 <p className="text-[10px] text-amber-600 mt-1">⚠️ Demo mode — metadata recorded, no files stored</p>

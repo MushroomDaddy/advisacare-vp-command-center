@@ -3,6 +3,7 @@
  *
  * Deduplication key: `${type}::${sourceRecordType}::${sourceRecordId}`
  * Auto-resolve: when the underlying issue no longer exists, the alert is resolved.
+ * Auto-reactivate: when a manually-resolved alert's underlying issue still exists, it reactivates.
  */
 import type { AppState, Alert, AlertSeverity } from '../types';
 import { getComplianceCategory, daysUntil } from './complianceUtils';
@@ -13,6 +14,7 @@ interface DerivedAlert {
   message: string;
   sourceRecordType: Alert['sourceRecordType'];
   sourceRecordId: string;
+  metadata?: Alert['metadata'];
 }
 
 /** Generate the dedup key for an alert */
@@ -85,16 +87,24 @@ export function deriveAlerts(state: AppState): DerivedAlert[] {
     }
   }
 
-  // 5. Open shifts
+  // 5. Open shifts. Catastrophic shifts carry caseId metadata for proper routing.
+  // Map referralId → catastrophic case id once for O(1) lookup.
+  const caseByReferral = new Map<string, string>();
+  for (const cc of state.catastrophicCases || []) {
+    caseByReferral.set(cc.referralId, cc.id);
+  }
+
   for (const shift of state.shifts) {
     if (shift.status === 'Open') {
       const isCatastrophic = shift.serviceType === 'Catastrophic Injury Care';
+      const caseId = caseByReferral.get(shift.referralId);
       derived.push({
         type: isCatastrophic ? 'Catastrophic Uncovered Shift' : 'Open Shift',
         severity: isCatastrophic ? 'Critical' : 'High',
         message: `${isCatastrophic ? 'CATASTROPHIC: ' : ''}Uncovered shift for ${shift.patientInitials} — ${shift.serviceType}`,
         sourceRecordType: 'Shift',
         sourceRecordId: shift.id,
+        ...(caseId ? { metadata: { caseId } } : {}),
       });
     }
   }
@@ -169,18 +179,26 @@ export function deriveAlerts(state: AppState): DerivedAlert[] {
 
 /**
  * Reconcile derived alerts with existing alerts.
- * - New derived alerts not in existing → create
- * - Existing alerts whose derived version no longer exists → auto-resolve
- * - Existing resolved/acknowledged alerts remain as-is
- * Returns the new alerts array.
+ *
+ * Rules:
+ *  - Derived but NOT existing → CREATE
+ *  - Existing AND derived AND resolved → REACTIVATE (the underlying issue still exists,
+ *    so a manual resolve cannot stick)
+ *  - Existing AND NOT derived AND NOT resolved → AUTO-RESOLVE
+ *  - Otherwise → leave alert as-is (acknowledgements are preserved; metadata refreshed)
+ *
+ * This guarantees Fix #1: a manually-resolved alert whose source problem still exists
+ * will be re-surfaced on the next reconcile pass.
  */
 export function reconcileAlerts(
   existingAlerts: Alert[],
   derivedAlerts: DerivedAlert[]
 ): Alert[] {
-  const derivedKeys = new Set(
-    derivedAlerts.map(d => alertKey(d.type, d.sourceRecordType, d.sourceRecordId))
-  );
+  // Index derived alerts by key for O(1) lookup
+  const derivedByKey = new Map<string, DerivedAlert>();
+  for (const d of derivedAlerts) {
+    derivedByKey.set(alertKey(d.type, d.sourceRecordType, d.sourceRecordId), d);
+  }
 
   const existingByKey = new Map<string, Alert>();
   for (const alert of existingAlerts) {
@@ -188,13 +206,34 @@ export function reconcileAlerts(
   }
 
   const result: Alert[] = [];
+  const now = new Date().toISOString();
 
-  // Keep existing alerts, auto-resolve if no longer derived
   for (const alert of existingAlerts) {
     const key = alertKey(alert.type, alert.sourceRecordType, alert.sourceRecordId);
-    if (!derivedKeys.has(key) && !alert.resolved) {
-      // Auto-resolve
-      result.push({ ...alert, resolved: true, resolvedAt: new Date().toISOString() });
+    const derived = derivedByKey.get(key);
+    const stillActive = !!derived;
+
+    if (!stillActive && !alert.resolved) {
+      // Auto-resolve: the underlying issue has gone away
+      result.push({ ...alert, resolved: true, resolvedAt: now });
+    } else if (stillActive && alert.resolved) {
+      // REACTIVATE: the underlying issue still exists, so the manual resolve
+      // cannot stick. Acknowledgement is also cleared so the user is re-prompted.
+      result.push({
+        ...alert,
+        resolved: false,
+        resolvedAt: undefined,
+        acknowledged: false,
+        acknowledgedAt: undefined,
+        reactivatedAt: now,
+        // Refresh message/severity/metadata from derivation in case state changed
+        message: derived.message,
+        severity: derived.severity,
+        ...(derived.metadata ? { metadata: derived.metadata } : {}),
+      });
+    } else if (stillActive && derived.metadata && !alert.metadata) {
+      // Backfill metadata onto an alert that pre-dates the metadata field
+      result.push({ ...alert, metadata: derived.metadata });
     } else {
       result.push(alert);
     }
@@ -206,10 +245,15 @@ export function reconcileAlerts(
     if (!existingByKey.has(key)) {
       result.push({
         id: `al_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        ...derived,
+        type: derived.type,
+        severity: derived.severity,
+        message: derived.message,
+        sourceRecordType: derived.sourceRecordType,
+        sourceRecordId: derived.sourceRecordId,
+        ...(derived.metadata ? { metadata: derived.metadata } : {}),
         acknowledged: false,
         resolved: false,
-        createdAt: new Date().toISOString(),
+        createdAt: now,
       });
     }
   }
@@ -220,4 +264,14 @@ export function reconcileAlerts(
 /** Count of active (unresolved AND unacknowledged) alerts */
 export function activeAlertCount(alerts: Alert[]): number {
   return alerts.filter(a => !a.resolved && !a.acknowledged).length;
+}
+
+/**
+ * Predicate used by tests and external callers: given current state, does the
+ * underlying problem for this alert still exist?
+ */
+export function isAlertStillActive(alert: Alert, state: AppState): boolean {
+  const derived = deriveAlerts(state);
+  const key = alertKey(alert.type, alert.sourceRecordType, alert.sourceRecordId);
+  return derived.some(d => alertKey(d.type, d.sourceRecordType, d.sourceRecordId) === key);
 }

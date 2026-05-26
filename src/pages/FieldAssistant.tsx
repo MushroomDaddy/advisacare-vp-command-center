@@ -1,7 +1,8 @@
 import { useAppState } from '../context/AppContext';
 import { useToast } from '../components/Toast';
 import type { QualityItem } from '../types';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Smartphone, Clock, MapPin, CheckCircle, Save, AlertTriangle, FileText,
   ChevronRight, Play, Square, Pen, WifiOff, RefreshCw, Wifi,
@@ -13,8 +14,19 @@ export default function FieldAssistant() {
     clockInVisit, clockOutVisit, createAlert, addOfflineQueueItem, syncOfflineItem,
   } = useAppState();
   const { showToast } = useToast();
-  const initVisitParam = new URLSearchParams(window.location.search).get('visit');
-  const [selectedVisit, setSelectedVisit] = useState<string | null>(initVisitParam);
+  // Fix #2: react to ?visit= changes even when this page is already mounted.
+  const [searchParams] = useSearchParams();
+  const deepLinkVisit = searchParams.get('visit');
+  const [selectedVisit, setSelectedVisit] = useState<string | null>(deepLinkVisit);
+
+  useEffect(() => {
+    if (!deepLinkVisit) return;
+    setSelectedVisit(deepLinkVisit);
+    setTimeout(() => {
+      const el = document.getElementById(`visit-${deepLinkVisit}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  }, [deepLinkVisit]);
   const [noteText, setNoteText] = useState('');
   const [showEscalation, setShowEscalation] = useState(false);
   const [escalationText, setEscalationText] = useState('');
@@ -83,22 +95,39 @@ export default function FieldAssistant() {
     showToast(`Clocked in for ${selectedVisitData.patientInitials}`, 'success');
   };
 
-  const handleClockOut = () => {
-    if (!selectedVisit || !selectedVisitData) return;
-    if (selectedVisitData.evvStatus !== 'Clocked In') {
-      showToast('Must clock in first', 'error');
-      return;
+  /** Fix #3: single gate predicate — visit must have clock-in AND completed checklist
+   *  before EITHER signature capture OR EVV exception can complete the visit. */
+  const evvGateBlocker = useMemo<string | null>(() => {
+    if (!selectedVisitData) return 'No visit selected';
+    if (!selectedVisitData.clockIn || selectedVisitData.evvStatus === 'Not Started') {
+      return 'Must clock in first';
     }
-
-    // Block End Visit if checklist is incomplete
     const allComplete = selectedVisitData.checklist.every(i => i.completed);
     if (!allComplete) {
-      showToast('Complete all checklist items before ending visit', 'error');
+      return 'Complete all checklist items before ending visit';
+    }
+    return null;
+  }, [selectedVisitData]);
+
+  const handleClockOut = () => {
+    if (!selectedVisit || !selectedVisitData) return;
+    if (evvGateBlocker) {
+      showToast(evvGateBlocker, 'error');
       return;
     }
-
     // Show signature modal — must capture signature OR file EVV exception
     setShowSignatureModal(true);
+  };
+
+  /** Fix #3: opening the EVV Exception modal must respect the same gate as
+   *  signature capture. Block here so we never even show the modal when the
+   *  checklist is incomplete or the user hasn't clocked in. */
+  const openEvvExceptionModal = () => {
+    if (evvGateBlocker) {
+      showToast(evvGateBlocker, 'error');
+      return;
+    }
+    setShowEvvExceptionModal(true);
   };
 
   const handleSignatureComplete = () => {
@@ -118,6 +147,13 @@ export default function FieldAssistant() {
 
   const handleEvvException = () => {
     if (!selectedVisit || !selectedVisitData || !evvExceptionNote.trim()) return;
+
+    // Fix #3: hard gate — even if the modal somehow opens, the submit cannot proceed
+    // without clock-in + a complete checklist.
+    if (evvGateBlocker) {
+      showToast(evvGateBlocker, 'error');
+      return;
+    }
 
     clockOutVisit(selectedVisit, false, evvExceptionNote);
 
@@ -303,13 +339,28 @@ export default function FieldAssistant() {
                   )}
                   {selectedVisitData.evvStatus === 'Clocked In' && (
                     <>
-                      <button onClick={handleClockOut} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-700">
+                      <button
+                        onClick={handleClockOut}
+                        disabled={!!evvGateBlocker}
+                        title={evvGateBlocker || 'End the visit and capture signature'}
+                        aria-label="End Visit"
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg ${evvGateBlocker ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
+                      >
                         <Square size={11} />End Visit
                       </button>
-                      <button onClick={() => setShowEvvExceptionModal(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 text-amber-700 text-xs font-medium rounded-lg hover:bg-amber-200 border border-amber-200">
+                      <button
+                        onClick={openEvvExceptionModal}
+                        disabled={!!evvGateBlocker}
+                        title={evvGateBlocker || 'File an EVV exception'}
+                        aria-label="EVV Exception"
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border ${evvGateBlocker ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200'}`}
+                      >
                         <AlertTriangle size={11} />EVV Exception
                       </button>
                     </>
+                  )}
+                  {evvGateBlocker && selectedVisitData.evvStatus === 'Clocked In' && (
+                    <p className="text-[10px] text-amber-600 mt-1" data-testid="evv-gate-msg">⚠️ {evvGateBlocker}</p>
                   )}
                 </div>
                 {selectedVisitData.evvException && (
@@ -433,7 +484,7 @@ export default function FieldAssistant() {
               >
                 Complete Visit
               </button>
-              <button onClick={() => setShowEvvExceptionModal(true)} className="btn-secondary flex-1 text-amber-700">
+              <button onClick={openEvvExceptionModal} className="btn-secondary flex-1 text-amber-700">
                 EVV Exception
               </button>
             </div>

@@ -1,9 +1,9 @@
 import { useAppState } from '../context/AppContext';
 import { useToast } from '../components/Toast';
-import type { QualityStatus } from '../types';
-import { useState, useMemo } from 'react';
+import type { QualityStatus, QualityItem } from '../types';
+import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { calculateQAO } from '../utils/dataLogic';
+import { calculateQAO, summarizeOasisCounts } from '../utils/dataLogic';
 import {
   Star, AlertTriangle, FileText, ChevronDown, ChevronUp,
   CheckCircle, XCircle, Pencil, Activity, ClipboardCheck, Heart, MessageSquare,
@@ -17,13 +17,9 @@ export default function Quality() {
   const { state, updateQualityStatus, updateQualityItem, addAuditEntry, createAlert, resolveAlert, runAlertEngine } = useAppState();
   const { showToast } = useToast();
   const [searchParams] = useSearchParams();
-  const initQid = new URLSearchParams(window.location.search).get('qid');
-  const initTab = (() => {
-    if (!initQid) return 'watchboard' as QualityTab;
-    // We can't access state.quality here directly since it's in a useState initializer, so default to watchboard
-    return 'watchboard' as QualityTab;
-  })();
-  const [activeTab, setActiveTab] = useState<QualityTab>(initTab);
+  const deepLinkQid = searchParams.get('qid');
+  const highlightId = deepLinkQid;
+  const [activeTab, setActiveTab] = useState<QualityTab>('watchboard');
   const [filterType, setFilterType] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');
@@ -32,11 +28,32 @@ export default function Quality() {
   const [editReviewerText, setEditReviewerText] = useState('');
   const [reviewNotesItem, setReviewNotesItem] = useState<string | null>(null);
   const [reviewNotesText, setReviewNotesText] = useState('');
-  const deepLinkQid = searchParams.get('qid');
-  const highlightId = deepLinkQid;
 
-  // QAO Score from OASIS assessments only
+  // Fix #2: react to ?qid= changes — switch to the correct tab, expand, highlight, scroll.
+  useEffect(() => {
+    if (!deepLinkQid) return;
+    const item: QualityItem | undefined = state.quality.find(q => q.id === deepLinkQid);
+    if (item) {
+      let targetTab: QualityTab = 'watchboard';
+      if (item.type === 'OASIS Due' || item.type === 'OASIS Review') targetTab = 'oasis';
+      else if (item.type === 'HOPE Assessment') targetTab = 'hope';
+      else if (item.type === 'CAHPS Follow-up') targetTab = 'cahps';
+      setActiveTab(targetTab);
+      setFilterType('All');
+      setFilterStatus('All');
+      setFilterPriority('All');
+      setExpandedItem(deepLinkQid);
+    }
+    setTimeout(() => {
+      const el = document.getElementById(`quality-${deepLinkQid}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  }, [deepLinkQid, state.quality]);
+
+  // Fix #7: QAO breakdown — submitted, accepted, rejected counts and percentage.
+  // Renamed/labeled as "Demo OASIS Quality Score" so it isn't mistaken for a certified CMS metric.
   const qaoScore = useMemo(() => calculateQAO(state.quality), [state.quality]);
+  const qaoCounts = useMemo(() => summarizeOasisCounts(state.quality), [state.quality]);
 
   const counts = useMemo(() => ({
     total: state.quality.length,
@@ -189,12 +206,20 @@ export default function Quality() {
         <div className="stat-card">
           <p className="stat-label">Resolved</p><p className="stat-value text-emerald-600">{counts.resolved}</p>
         </div>
-        <div className="stat-card">
-          <p className="stat-label">QAO Score</p>
-          <p className={`stat-value ${qaoScore !== null && qaoScore >= 80 ? 'text-emerald-600' : 'text-amber-600'}`}>
-            {qaoScore !== null ? `${qaoScore}%` : 'N/A'}
+        <div className="stat-card" data-testid="qao-card">
+          <p className="stat-label">Demo OASIS Quality Score</p>
+          <p
+            className={`stat-value ${qaoScore !== null && qaoScore >= 80 ? 'text-emerald-600' : 'text-amber-600'}`}
+            data-testid="qao-percentage"
+          >
+            {qaoCounts.percentage !== null ? `${qaoCounts.percentage}%` : qaoScore !== null ? `${qaoScore}%` : 'N/A'}
           </p>
-          <p className="text-[10px] text-slate-400 mt-0.5">Demo OASIS Quality Score</p>
+          <div className="mt-1 grid grid-cols-3 gap-1 text-[10px] text-slate-500" data-testid="qao-breakdown">
+            <div><span className="font-semibold text-slate-700" data-testid="qao-submitted">{qaoCounts.submitted}</span> submitted</div>
+            <div><span className="font-semibold text-emerald-600" data-testid="qao-accepted">{qaoCounts.accepted}</span> accepted</div>
+            <div><span className="font-semibold text-red-600" data-testid="qao-rejected">{qaoCounts.rejected}</span> rejected</div>
+          </div>
+          <p className="text-[9px] text-amber-600 mt-1">Demo heuristic — not a certified CMS calculation</p>
         </div>
         <div className="stat-card">
           <p className="stat-label">HOPE Overdue</p>

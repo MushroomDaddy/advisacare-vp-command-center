@@ -67,6 +67,37 @@ const sourceParamMap: Record<string, string> = {
   Document: 'doc',
 };
 
+/**
+ * Fix #6 — given an alert, compute the View Source destination.
+ *
+ *  - Catastrophic-flagged shift alerts (metadata.caseId present, or type starts with
+ *    "Catastrophic ") route to /catastrophic-care?case=CASE_ID. This includes the
+ *    "Catastrophic Uncovered Shift" alert from the alert engine.
+ *  - Plain shift alerts route to /staffing?shift=SHIFT_ID.
+ *  - Everything else uses the source-record map above.
+ *
+ * Centralised so the notification center and any other consumer share the same logic.
+ */
+export function resolveAlertHref(alert: {
+  type: string;
+  sourceRecordType: string;
+  sourceRecordId: string;
+  metadata?: { caseId?: string };
+}): string {
+  if (alert.metadata?.caseId) {
+    return `/catastrophic-care?case=${encodeURIComponent(alert.metadata.caseId)}`;
+  }
+  if (alert.type && alert.type.startsWith('Catastrophic ')) {
+    // Catastrophic alert without metadata — fall back to the catastrophic page.
+    return `/catastrophic-care`;
+  }
+  const basePath = sourceRouteMap[alert.sourceRecordType] || '/';
+  const paramKey = sourceParamMap[alert.sourceRecordType];
+  return paramKey
+    ? `${basePath}?${paramKey}=${encodeURIComponent(alert.sourceRecordId)}`
+    : basePath;
+}
+
 function NotificationCenter({ onClose }: { onClose: () => void }) {
   const { state, acknowledgeAlert, resolveAlert, addAuditEntry } = useAppState();
   const { showToast } = useToast();
@@ -107,13 +138,13 @@ function NotificationCenter({ onClose }: { onClose: () => void }) {
     showToast('Alert resolved', 'success');
   };
 
-  const handleViewSource = (alert: { sourceRecordType: string; sourceRecordId: string }) => {
-    const basePath = sourceRouteMap[alert.sourceRecordType] || '/';
-    const paramKey = sourceParamMap[alert.sourceRecordType];
-    const path = paramKey
-      ? `${basePath}?${paramKey}=${encodeURIComponent(alert.sourceRecordId)}`
-      : basePath;
-    navigate(path);
+  const handleViewSource = (alert: {
+    type: string;
+    sourceRecordType: string;
+    sourceRecordId: string;
+    metadata?: { caseId?: string };
+  }) => {
+    navigate(resolveAlertHref(alert));
     onClose();
   };
 

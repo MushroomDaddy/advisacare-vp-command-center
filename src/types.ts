@@ -55,6 +55,13 @@ export interface Alert {
   createdAt: string;
   acknowledgedAt?: string;
   resolvedAt?: string;
+  /** Set when reconcileAlerts reactivates a previously-resolved alert because the underlying problem still exists */
+  reactivatedAt?: string;
+  /** Optional source-record metadata for richer deep linking (e.g. caseId for catastrophic shifts) */
+  metadata?: {
+    caseId?: string;
+    [key: string]: string | undefined;
+  };
 }
 
 // --- Documents ---

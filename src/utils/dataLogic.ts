@@ -178,11 +178,47 @@ export function computeSlaStatus(referral: Referral): Referral['slaStatus'] {
   return 'OK';
 }
 
-// --- 7) QAO calculation from OASIS assessments ---
+// --- 7) Demo OASIS Quality Score (QAO) -----------------------------------------------
+//
+// IMPORTANT (Fix #7): this is a DEMO heuristic, NOT a certified CMS OASIS quality
+// calculation. The metric is exposed as "Demo OASIS Quality Score" in the UI to make
+// that explicit. The score is the ratio of accepted to submitted OASIS assessments;
+// `summarizeOasisCounts` returns the full breakdown for the dashboard.
+
+export interface OasisCountSummary {
+  /** Items with status Submitted/Accepted/Rejected/Resolved — i.e. processed by QA */
+  submitted: number;
+  /** Items with status Accepted or Resolved */
+  accepted: number;
+  /** Items with status Rejected */
+  rejected: number;
+  /** Items with status In Progress (Submitted but not yet decided) */
+  inProgress: number;
+  /** Items with status Open (not yet submitted) */
+  open: number;
+  /** Percentage = round(accepted / submitted * 100), or null if no submitted items */
+  percentage: number | null;
+}
+
+/** Sum OASIS items by lifecycle bucket for the Demo OASIS Quality Score breakdown. */
+export function summarizeOasisCounts(quality: QualityItem[]): OasisCountSummary {
+  const oasis = quality.filter(q => q.type === 'OASIS Due' || q.type === 'OASIS Review');
+  const submitted = oasis.filter(q =>
+    q.status === 'Submitted' || q.status === 'Accepted' || q.status === 'Rejected' || q.status === 'Resolved'
+  ).length;
+  const accepted = oasis.filter(q => q.status === 'Accepted' || q.status === 'Resolved').length;
+  const rejected = oasis.filter(q => q.status === 'Rejected').length;
+  const inProgress = oasis.filter(q => q.status === 'In Progress' || q.status === 'Submitted').length;
+  const open = oasis.filter(q => q.status === 'Open').length;
+  const percentage = submitted > 0 ? Math.round((accepted / submitted) * 100) : null;
+  return { submitted, accepted, rejected, inProgress, open, percentage };
+}
+
 /**
- * Demo OASIS Quality Score (QAO)
- * Calculated as: (accepted OASIS assessments / submitted OASIS assessments) × 100
- * Falls back to average oasisScore if no submitted/accepted status data available.
+ * Demo OASIS Quality Score (QAO).
+ * Calculated as: (accepted OASIS assessments / submitted OASIS assessments) × 100.
+ * Falls back to average oasisScore when no submitted/accepted lifecycle data exists.
+ * Returns null if there are no OASIS items at all OR if no scoring signal is available.
  */
 export function calculateQAO(quality: QualityItem[]): number | null {
   const oasisItems = quality.filter(
@@ -190,19 +226,10 @@ export function calculateQAO(quality: QualityItem[]): number | null {
   );
   if (oasisItems.length === 0) return null;
 
-  // Primary: accepted/submitted ratio
-  const submitted = oasisItems.filter(q =>
-    q.status === 'Submitted' || q.status === 'Accepted' || q.status === 'Rejected' || q.status === 'Resolved'
-  ).length;
-  const accepted = oasisItems.filter(q =>
-    q.status === 'Accepted' || q.status === 'Resolved'
-  ).length;
+  const { submitted, percentage } = summarizeOasisCounts(quality);
+  if (submitted > 0 && percentage !== null) return percentage;
 
-  if (submitted > 0) {
-    return Math.round((accepted / submitted) * 100);
-  }
-
-  // Fallback: average oasisScore
+  // Fallback: average oasisScore (preserved for backward compat — see hardening tests)
   const scored = oasisItems.filter(q => q.oasisScore !== undefined);
   if (scored.length === 0) return null;
   const total = scored.reduce((sum, q) => sum + (q.oasisScore ?? 0), 0);

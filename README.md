@@ -76,4 +76,11 @@ src/
 
 ## License
 
-Proprietary — AdvisaCare
+Demo / prototype — All rights reserved.
+
+This repository is a demonstration prototype. The "Proprietary — AdvisaCare"
+attribution has not been formally approved by AdvisaCare and has been removed
+pending written approval. Until AdvisaCare confirms the license terms in
+writing, treat this code as "All rights reserved" by the repository owner.
+
+Roadmap and source-of-truth planning live in [ROADMAP.md](./ROADMAP.md).

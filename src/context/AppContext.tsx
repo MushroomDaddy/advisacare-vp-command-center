@@ -158,7 +158,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         a.id === id ? { ...a, resolved: true, resolvedAt: new Date().toISOString(), acknowledged: true } : a
       ),
     }));
-  }, []);
+    // Fix #1: a manual resolve must not stick if the underlying problem still exists.
+    // Run reconciliation immediately after — reconcileAlerts will reactivate the alert
+    // if deriveAlerts still emits it.
+    setTimeout(reconcileNow, 50);
+  }, [reconcileNow]);
 
   /** Run the alert engine: derive alerts from state, reconcile with existing */
   const runAlertEngine = useCallback(() => {
