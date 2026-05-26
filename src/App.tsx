@@ -7,7 +7,7 @@ import { activeAlertCount } from './lib/alertEngine';
 import {
   LayoutDashboard, ClipboardList, Users, ShieldCheck, Smartphone,
   Star, Handshake, Settings, FileSearch, Bell, AlertTriangle,
-  ChevronRight, Shield, Eye, Check, X, Menu, XCircle, HeartPulse,
+  ChevronRight, Shield, Eye, Check, X, Menu, XCircle, HeartPulse, Lock,
 } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Referrals from './pages/Referrals';
@@ -19,6 +19,7 @@ import CatastrophicCare from './pages/CatastrophicCare';
 import ReferralPartners from './pages/ReferralPartners';
 import SettingsPage from './pages/Settings';
 import AuditLog from './pages/AuditLog';
+import SecurityChecklist from './pages/SecurityChecklist';
 import './index.css';
 
 const routeComponents: Record<string, React.ComponentType> = {
@@ -32,11 +33,12 @@ const routeComponents: Record<string, React.ComponentType> = {
   '/referral-partners': ReferralPartners,
   '/settings': SettingsPage,
   '/audit-log': AuditLog,
+  '/security-checklist': SecurityChecklist,
 };
 
 const iconMap: Record<string, React.ComponentType<{ className?: string; size?: number }>> = {
   LayoutDashboard, ClipboardList, Users, ShieldCheck, Smartphone,
-  Star, Handshake, Settings, FileSearch, HeartPulse,
+  Star, Handshake, Settings, FileSearch, HeartPulse, Lock,
 };
 
 /**
