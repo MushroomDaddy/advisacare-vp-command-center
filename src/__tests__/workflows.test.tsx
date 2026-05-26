@@ -32,7 +32,7 @@ import { ToastProvider } from '../components/Toast';
 import { deriveAlerts, reconcileAlerts, isAlertStillActive } from '../lib/alertEngine';
 import { computeReadiness } from '../utils/dataLogic';
 import { REQUIRED_DOCUMENTS } from '../types';
-import { resolveAlertHref } from '../App';
+import { resolveAlertHref } from '../lib/navigationUtils';
 import type {
   AppState, Alert, ComplianceItem, Shift, Referral, QualityItem,
 } from '../types';

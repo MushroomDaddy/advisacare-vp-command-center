@@ -1,7 +1,7 @@
 import { useAppState } from '../context/AppContext';
 import { useToast } from '../components/Toast';
 import type { QualityItem } from '../types';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Smartphone, Clock, MapPin, CheckCircle, Save, AlertTriangle, FileText,
@@ -15,17 +15,33 @@ export default function FieldAssistant() {
   } = useAppState();
   const { showToast } = useToast();
   // Fix #2: react to ?visit= changes even when this page is already mounted.
+  // The deep link is the source of truth; local clicks are tracked as a
+  // separate override so we never have to setState inside useEffect.
   const [searchParams] = useSearchParams();
   const deepLinkVisit = searchParams.get('visit');
-  const [selectedVisit, setSelectedVisit] = useState<string | null>(deepLinkVisit);
+  const [userSelection, setUserSelection] = useState<string | null>(null);
+  // When the URL changes, the override is cleared by deriving from the
+  // composite of (override, deep link). useMemo recomputes the chosen visit
+  // each render — no setState-in-effect needed.
+  const lastDeepLinkRef = useRef<string | null>(deepLinkVisit);
+  if (lastDeepLinkRef.current !== deepLinkVisit) {
+    lastDeepLinkRef.current = deepLinkVisit;
+    // Reset the override synchronously during render when the URL changes.
+    // Safe — this is the same pattern React's docs recommend for derived
+    // state ("Adjusting state based on previous state during render").
+    if (userSelection !== null) setUserSelection(null);
+  }
+  const selectedVisit = userSelection ?? deepLinkVisit;
+  const setSelectedVisit = (id: string | null) => setUserSelection(id);
 
+  // Effect only does side effects (scroll), never setState.
   useEffect(() => {
     if (!deepLinkVisit) return;
-    setSelectedVisit(deepLinkVisit);
-    setTimeout(() => {
+    const id = window.setTimeout(() => {
       const el = document.getElementById(`visit-${deepLinkVisit}`);
       el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 100);
+    return () => window.clearTimeout(id);
   }, [deepLinkVisit]);
   const [noteText, setNoteText] = useState('');
   const [showEscalation, setShowEscalation] = useState(false);
