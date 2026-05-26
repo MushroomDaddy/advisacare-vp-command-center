@@ -2,23 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * AdvisaCare-inspired healthcare command-center theme.
+ *
+ *   Primary command-center colour:  deep teal       #06494F
+ *   Restrained brand accent:        lime green      #9BB83F
+ *   App canvas:                     soft green-gray #F5F8F7
+ *   Card surface:                   white           #FFFFFF
+ *   Calm borders:                   #DDE8E5
+ *   Operational status colours (kept vivid for urgency):
+ *     critical = #DC2626 · warning = #D97706 · success = #059669
+ *
+ * Design rules:
+ *  • Deep teal carries chrome (sidebar, primary buttons, drawer headers).
+ *  • Lime is used SPARINGLY — accent rails, brand dots, positive readiness pulse.
+ *  • Critical/warning/success stay reserved for operational urgency, never decoration.
+ *  • Inspired theme only — no AdvisaCare logos or brand assets bundled here.
+ */
+
 @layer base {
   body {
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background: #f1f5f9;
-    color: #1e293b;
+    background: #F5F8F7;       /* advisa-surface */
+    color: #1F2F33;            /* advisa-text */
   }
 
-  /* Custom scrollbar */
+  /* Custom scrollbar — calm green-gray, matches the canvas. */
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  ::-webkit-scrollbar-thumb { background: #C8D6D3; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #9BAEAB; }
 }
 
-/* Slide-in transition used by the notification panel and modals (salvaged from the overhaul branch). */
+/* Slide-in transition used by the notification panel and modals. */
 @keyframes slide-in {
   from { transform: translateX(100%); opacity: 0; }
   to   { transform: translateX(0);    opacity: 1; }
@@ -27,9 +45,19 @@
   animation: slide-in 0.25s ease-out;
 }
 
+/* Subtle accent line used on page headers / section anchors. */
+.accent-line {
+  width: 28px;
+  height: 3px;
+  border-radius: 2px;
+  background: #9BB83F;   /* advisa-accent */
+  display: inline-block;
+}
+
 @layer components {
+  /* ─── Cards / surfaces ──────────────────────────────────────────── */
   .card {
-    @apply bg-white rounded-card shadow-card border border-advisa-border p-5;
+    @apply bg-advisa-card rounded-card shadow-card border border-advisa-border p-5;
     transition: box-shadow 0.2s ease, transform 0.15s ease;
   }
   .card:hover {
@@ -37,14 +65,14 @@
   }
 
   .card-header {
-    @apply text-sm font-semibold text-slate-700 tracking-tight flex items-center gap-2 mb-4;
+    @apply text-sm font-semibold text-advisa-text tracking-tight flex items-center gap-2 mb-4;
   }
   .card-header svg {
-    @apply w-4 h-4 text-advisa-accent;
+    @apply w-4 h-4 text-advisa-primary;
   }
 
   .stat-card {
-    @apply bg-white rounded-card shadow-card border border-advisa-border p-4;
+    @apply bg-advisa-card rounded-card shadow-card border border-advisa-border p-4;
     transition: box-shadow 0.2s ease, transform 0.15s ease;
   }
   .stat-card:hover {
@@ -52,56 +80,200 @@
     transform: translateY(-1px);
   }
   .stat-label {
-    @apply text-xs font-medium text-slate-500 uppercase tracking-wider;
+    @apply text-xs font-medium uppercase tracking-wider;
+    color: #667A7E;            /* advisa-text-muted */
   }
   .stat-value {
-    @apply text-2xl font-bold mt-1 tabular-nums;
+    @apply text-2xl font-bold mt-1 tabular-nums text-advisa-text;
   }
 
+  /* ─── Badges ────────────────────────────────────────────────────── */
   .badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold tracking-wide;
   }
+  /* Operational urgency — kept in red/amber/emerald so they read as RISK, not brand. */
   .badge-urgent {
     @apply bg-red-50 text-red-700 ring-1 ring-inset ring-red-200;
   }
   .badge-warning {
     @apply bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200;
   }
+  /* Success / ready states — use the soft brand lime so positive signals feel on-brand. */
   .badge-success {
-    @apply bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200;
+    background: #F3F8E8;        /* advisa-lime-soft */
+    color: #4F6A1A;             /* darker lime for contrast */
+    @apply ring-1 ring-inset;
+    --tw-ring-color: rgba(155, 184, 63, 0.45);
   }
+  /* Informational — clinical blue/teal */
   .badge-info {
-    @apply bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200;
+    background: #EAF7FC;        /* advisa-info-soft */
+    color: #0E5F7A;
+    @apply ring-1 ring-inset;
+    --tw-ring-color: rgba(21, 151, 200, 0.30);
   }
   .badge-neutral {
-    @apply bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200;
+    background: #EEF3F1;
+    color: #46555A;
+    @apply ring-1 ring-inset ring-advisa-border;
   }
 
+  /* ─── Buttons ───────────────────────────────────────────────────── */
   .btn-primary {
-    @apply inline-flex items-center gap-2 px-4 py-2 bg-advisa-accent text-white text-sm font-medium rounded-lg hover:bg-advisa-accent-dark transition-colors shadow-sm;
+    @apply inline-flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors shadow-sm;
+    background: #06494F;        /* advisa-primary */
+  }
+  .btn-primary:hover {
+    background: #0B5F66;        /* advisa-primary-hover */
+  }
+  .btn-primary:focus-visible {
+    outline: 2px solid #9BB83F;  /* lime focus ring — distinctive */
+    outline-offset: 2px;
   }
   .btn-secondary {
-    @apply inline-flex items-center gap-2 px-4 py-2 bg-white text-slate-700 text-sm font-medium rounded-lg border border-advisa-border hover:bg-slate-50 transition-colors;
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-white text-advisa-text text-sm font-medium rounded-lg border border-advisa-border transition-colors;
+  }
+  .btn-secondary:hover {
+    background: #F0F5F3;
+  }
+  .btn-lime {
+    @apply inline-flex items-center gap-2 px-4 py-2 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm;
+    background: #9BB83F;        /* advisa-lime — use sparingly */
+  }
+  .btn-lime:hover {
+    background: #86A832;
   }
 
+  /* ─── Inputs ────────────────────────────────────────────────────── */
   .input {
-    @apply w-full px-3 py-2 text-sm bg-white border border-advisa-border rounded-lg focus:outline-none focus:ring-2 focus:ring-advisa-accent/30 focus:border-advisa-accent transition-shadow;
+    @apply w-full px-3 py-2 text-sm bg-white border border-advisa-border rounded-lg transition-shadow;
+    color: #1F2F33;
+  }
+  .input:focus {
+    outline: none;
+    border-color: #06494F;
+    box-shadow: 0 0 0 3px rgba(6, 73, 79, 0.15);
   }
   .select {
-    @apply px-3 py-2 text-sm bg-white border border-advisa-border rounded-lg focus:outline-none focus:ring-2 focus:ring-advisa-accent/30 focus:border-advisa-accent transition-shadow appearance-none cursor-pointer;
+    @apply px-3 py-2 text-sm bg-white border border-advisa-border rounded-lg transition-shadow appearance-none cursor-pointer;
+    color: #1F2F33;
+  }
+  .select:focus {
+    outline: none;
+    border-color: #06494F;
+    box-shadow: 0 0 0 3px rgba(6, 73, 79, 0.15);
   }
 
+  /* ─── Tables ────────────────────────────────────────────────────── */
   .table-head {
-    @apply text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-50/80 px-4 py-3 text-left;
+    @apply text-xs font-semibold uppercase tracking-wider px-4 py-3 text-left;
+    background: #F0F5F3;        /* soft green-gray header band */
+    color: #46555A;
+    border-bottom: 1px solid #DDE8E5;
   }
   .table-cell {
-    @apply px-4 py-3 text-sm text-slate-700 border-t border-slate-100;
+    @apply px-4 py-3 text-sm border-t border-advisa-border;
+    color: #1F2F33;
   }
 
+  /* ─── Typography (editorial set) ────────────────────────────────── */
+  /* Page titles use Fraunces — a contemporary optical-sizing serif — so
+     executive headings read with presence, while body text stays Inter. */
   .page-title {
-    @apply text-xl font-bold text-slate-800 tracking-tight;
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-size: 28px;
+    line-height: 1.05;
+    color: #04363B;             /* secondary / darker teal */
   }
   .section-title {
-    @apply text-sm font-semibold text-slate-700 tracking-tight;
+    @apply text-sm font-semibold tracking-tight;
+    color: #1F2F33;
+  }
+  /* Mono small-caps eyebrow used above page titles and section anchors. */
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.20em;
+    text-transform: uppercase;
+    color: #667A7E;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .eyebrow::before {
+    content: '';
+    width: 14px;
+    height: 2px;
+    background: #9BB83F;
+    border-radius: 2px;
+  }
+
+  /* Editorial accent rule (used above sections / under page titles). */
+  .accent-rule {
+    display: inline-block;
+    width: 28px;
+    height: 3px;
+    border-radius: 2px;
+    background: #9BB83F;
+  }
+
+  /* ─── Monogram (typographic brand mark) ─────────────────────────── */
+  .monogram {
+    width: 38px;
+    height: 38px;
+    border-radius: 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #9BB83F 0%, #86A832 100%);
+    box-shadow: 0 6px 14px -2px rgba(155, 184, 63, 0.45),
+                inset 0 1px 0 rgba(255, 255, 255, 0.20);
+    color: #fff;
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 700;
+    font-size: 19px;
+    letter-spacing: -0.04em;
+    user-select: none;
+  }
+  .monogram-sm {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    font-size: 14px;
+  }
+
+  /* ─── Live pulse (command-center signal) ────────────────────────── */
+  @keyframes advisa-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(155, 184, 63, 0.55); }
+    50%      { box-shadow: 0 0 0 5px rgba(155, 184, 63, 0); }
+  }
+  .live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #9BB83F;
+    display: inline-block;
+    animation: advisa-pulse 2s ease-in-out infinite;
+  }
+
+  /* ─── Sidebar / nav ─────────────────────────────────────────────── */
+  /* These classes are not yet referenced everywhere — App.tsx uses Tailwind
+     utilities directly — but they're available for future nav refactors. */
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150;
+    color: #BCD5D3;
+    border-left: 3px solid transparent;
+  }
+  .nav-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #FFFFFF;
+  }
+  .nav-item-active {
+    background: rgba(255, 255, 255, 0.10);
+    color: #FFFFFF;
+    border-left-color: #9BB83F;  /* lime accent rail on the active item */
   }
 }

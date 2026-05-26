@@ -8,24 +8,42 @@ import {
   ChevronRight, Play, Square, Pen, WifiOff, RefreshCw, Wifi,
 } from 'lucide-react';
 
+/**
+ * Outer wrapper: reads ?visit= from the URL and remounts FieldAssistantInner
+ * (via `key={deepLinkVisit}`) whenever it changes. This is the cleanest
+ * lint-friendly way to react to query-param changes on an already-mounted
+ * page — no setState in useEffect, no ref mutation during render.
+ */
 export default function FieldAssistant() {
+  const [searchParams] = useSearchParams();
+  const deepLinkVisit = searchParams.get('visit');
+  return (
+    <FieldAssistantInner
+      key={deepLinkVisit ?? '__none__'}
+      deepLinkVisit={deepLinkVisit}
+    />
+  );
+}
+
+function FieldAssistantInner({ deepLinkVisit }: { deepLinkVisit: string | null }) {
   const {
     state, updateVisitChecklist, updateVisitNotes, addIncidentReport, addAuditEntry,
     clockInVisit, clockOutVisit, createAlert, addOfflineQueueItem, syncOfflineItem,
   } = useAppState();
   const { showToast } = useToast();
-  // Fix #2: react to ?visit= changes even when this page is already mounted.
-  const [searchParams] = useSearchParams();
-  const deepLinkVisit = searchParams.get('visit');
+  // selectedVisit is initialised from the deep link (the outer wrapper's
+  // key forces a fresh mount when ?visit= changes, so this initial value
+  // tracks the URL without any in-render setState).
   const [selectedVisit, setSelectedVisit] = useState<string | null>(deepLinkVisit);
 
+  // Effect only does side effects (scroll), never setState.
   useEffect(() => {
     if (!deepLinkVisit) return;
-    setSelectedVisit(deepLinkVisit);
-    setTimeout(() => {
+    const id = window.setTimeout(() => {
       const el = document.getElementById(`visit-${deepLinkVisit}`);
       el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 100);
+    return () => window.clearTimeout(id);
   }, [deepLinkVisit]);
   const [noteText, setNoteText] = useState('');
   const [showEscalation, setShowEscalation] = useState(false);

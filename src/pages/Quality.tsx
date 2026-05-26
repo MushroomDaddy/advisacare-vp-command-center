@@ -1,6 +1,6 @@
 import { useAppState } from '../context/AppContext';
 import { useToast } from '../components/Toast';
-import type { QualityStatus, QualityItem } from '../types';
+import type { QualityItem, QualityStatus } from '../types';
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { calculateQAO, summarizeOasisCounts } from '../utils/dataLogic';
@@ -13,42 +13,69 @@ const STATUS_OPTIONS: QualityStatus[] = ['Open', 'In Progress', 'Submitted', 'Ac
 
 type QualityTab = 'watchboard' | 'oasis' | 'hope' | 'cahps';
 
+/**
+ * Outer wrapper: reads ?qid= from the URL, computes the tab the deep-linked
+ * item belongs to, and remounts QualityInner (via `key={deepLinkQid}`) on
+ * every URL change. Inner state is initialised from the URL, so we never
+ * mutate refs or call setState during render.
+ */
 export default function Quality() {
-  const { state, updateQualityStatus, updateQualityItem, addAuditEntry, createAlert, resolveAlert, runAlertEngine } = useAppState();
-  const { showToast } = useToast();
+  const { state } = useAppState();
   const [searchParams] = useSearchParams();
   const deepLinkQid = searchParams.get('qid');
+
+  const deepLinkTab = useMemo<QualityTab>(() => {
+    if (!deepLinkQid) return 'watchboard';
+    const item: QualityItem | undefined = state.quality.find(q => q.id === deepLinkQid);
+    if (!item) return 'watchboard';
+    if (item.type === 'OASIS Due' || item.type === 'OASIS Review') return 'oasis';
+    if (item.type === 'HOPE Assessment') return 'hope';
+    if (item.type === 'CAHPS Follow-up') return 'cahps';
+    return 'watchboard';
+  }, [deepLinkQid, state.quality]);
+
+  return (
+    <QualityInner
+      key={deepLinkQid ?? '__none__'}
+      deepLinkQid={deepLinkQid}
+      initialTab={deepLinkTab}
+    />
+  );
+}
+
+interface QualityInnerProps {
+  deepLinkQid: string | null;
+  initialTab: QualityTab;
+}
+
+function QualityInner({ deepLinkQid, initialTab }: QualityInnerProps) {
+  const { state, updateQualityStatus, updateQualityItem, addAuditEntry, createAlert, resolveAlert, runAlertEngine } = useAppState();
+  const { showToast } = useToast();
   const highlightId = deepLinkQid;
-  const [activeTab, setActiveTab] = useState<QualityTab>('watchboard');
+
+  // Inner state initialised from the URL on first mount. The outer wrapper's
+  // key={deepLinkQid} forces a re-mount on URL change so these defaults
+  // re-apply automatically — no in-render setState, no refs.
+  const [activeTab, setActiveTab] = useState<QualityTab>(initialTab);
   const [filterType, setFilterType] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');
-  const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  const [expandedItem, setExpandedItem] = useState<string | null>(deepLinkQid);
+
   const [editReviewerItem, setEditReviewerItem] = useState<string | null>(null);
   const [editReviewerText, setEditReviewerText] = useState('');
   const [reviewNotesItem, setReviewNotesItem] = useState<string | null>(null);
   const [reviewNotesText, setReviewNotesText] = useState('');
 
-  // Fix #2: react to ?qid= changes — switch to the correct tab, expand, highlight, scroll.
+  // Side-effect only: scroll the deep-linked item into view.
   useEffect(() => {
     if (!deepLinkQid) return;
-    const item: QualityItem | undefined = state.quality.find(q => q.id === deepLinkQid);
-    if (item) {
-      let targetTab: QualityTab = 'watchboard';
-      if (item.type === 'OASIS Due' || item.type === 'OASIS Review') targetTab = 'oasis';
-      else if (item.type === 'HOPE Assessment') targetTab = 'hope';
-      else if (item.type === 'CAHPS Follow-up') targetTab = 'cahps';
-      setActiveTab(targetTab);
-      setFilterType('All');
-      setFilterStatus('All');
-      setFilterPriority('All');
-      setExpandedItem(deepLinkQid);
-    }
-    setTimeout(() => {
+    const id = window.setTimeout(() => {
       const el = document.getElementById(`quality-${deepLinkQid}`);
       el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 100);
-  }, [deepLinkQid, state.quality]);
+    return () => window.clearTimeout(id);
+  }, [deepLinkQid]);
 
   // Fix #7: QAO breakdown — submitted, accepted, rejected counts and percentage.
   // Renamed/labeled as "Demo OASIS Quality Score" so it isn't mistaken for a certified CMS metric.
