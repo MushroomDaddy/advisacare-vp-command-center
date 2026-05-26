@@ -1,73 +1,86 @@
-# React + TypeScript + Vite
+# AdvisaCare VP Command Center
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+> ⚠️ **DEMO / PROTOTYPE ONLY** — This application uses simulated data for demonstration purposes. No real patient information (PHI) is processed, stored, or transmitted. This is not a HIPAA-compliant system and is not suitable for production use with real patient data.
 
-Currently, two official plugins are available:
+A comprehensive executive dashboard for home health and hospice agency operations, showcasing workflow automation, alert-driven compliance, and role-based access control.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Features
 
-## React Compiler
+- **Referral Pipeline** — Track referrals from intake through start-of-care with Kanban and table views, document uploads, SLA tracking, and readiness indicators
+- **Staffing & Scheduling** — Match staff to referrals, manage shifts, track acceptance, and monitor credential compliance before assignment
+- **Compliance Tracking** — Unified compliance status (Expired → Critical Soon → Due Soon → Compliant) with alert-driven renewal workflows
+- **Field Assistant** — Mobile-friendly visit management with EVV clock-in/out, checklists, signature capture, incident reporting, and offline queue
+- **Quality Management** — Tabbed interface for Watchboard, OASIS Queue, HOPE Queue, and CAHPS follow-ups with outcome tracking
+- **Catastrophic Care** — Dedicated view for high-acuity catastrophic injury cases with coverage tracking, shift management, and supply monitoring
+- **Alert Engine** — Real-time alerts derived from live state: expired credentials, SLA risk, open shifts, overdue follow-ups, and more
+- **Notification Center** — View Source navigation to exact records, acknowledge/resolve with audit trail
+- **Referral Partners** — Track partner volume, conversion rates, follow-up schedules, and risk levels
+- **Audit Log** — Filterable, exportable audit trail of all user actions
+- **Role Switching** — Demo role switching (VP, Intake Coordinator, Scheduler, Field Staff, Compliance Admin) with role-appropriate views and permissions
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Tech Stack
 
-## Expanding the ESLint configuration
+- React 19 + TypeScript
+- Vite 8 (build tooling)
+- Tailwind CSS 3 (styling)
+- Recharts 3 (charts)
+- Lucide React (icons)
+- Vitest 4 + @testing-library/react (testing)
+- react-router-dom 7 (routing)
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Getting Started
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm ci
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Scripts
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Production build |
+| `npm run lint` | Run ESLint |
+| `npm test -- --run` | Run all tests once |
+| `npm test` | Run tests in watch mode |
+| `npm run preview` | Preview production build |
+
+## Demo Data
+
+All data is simulated and stored in `localStorage`. Use Settings to:
+- **Switch roles** to see role-based access in action
+- **Export/Import** demo state as JSON
+- **Reset** to original seed data
+
+## Important Notices
+
+> **Prototype Only** — This application uses simulated data for demonstration purposes. It is not intended for production use with real patient information. A production deployment would require HIPAA-compliant infrastructure, authentication, encryption, and audit controls not present in this demo.
+
+## Project Structure
+
 ```
+src/
+├── __tests__/          # Vitest test suites
+├── components/         # Shared components (Toast)
+├── context/            # AppContext (central state management)
+├── data/               # Seed data and localStorage persistence
+├── lib/                # Utilities (permissions, dates, compliance, alerts, CSV)
+├── pages/              # Route pages
+├── utils/              # Data logic and KPI derivation
+├── App.tsx             # Root component with router and sidebar
+└── types.ts            # TypeScript interfaces
+```
+
+## License
+
+Demo / prototype — All rights reserved.
+
+This repository is a demonstration prototype. The "Proprietary — AdvisaCare"
+attribution has not been formally approved by AdvisaCare and has been removed
+pending written approval. Until AdvisaCare confirms the license terms in
+writing, treat this code as "All rights reserved" by the repository owner.
+
+Roadmap and source-of-truth planning live in [ROADMAP.md](./ROADMAP.md).

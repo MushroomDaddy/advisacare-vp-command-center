@@ -161,7 +161,7 @@ export default function AuditLog() {
         <ul className="text-[11px] text-slate-500 space-y-1">
           <li>• Production: immutable append-only audit logging with hash chains</li>
           <li>• Encrypted storage with strict access controls</li>
-          <li>• HIPAA minimum 6-year retention</li>
+          <li>• Production: regulatory-compliant retention policies</li>
           <li>• Include IP address, user agent, and session ID</li>
         </ul>
       </div>

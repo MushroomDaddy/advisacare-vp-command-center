@@ -1,7 +1,8 @@
 import { useAppState } from '../context/AppContext';
 import { useToast } from '../components/Toast';
 import type { ReferralPartner } from '../types';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Handshake, Plus, Calendar, TrendingUp, TrendingDown, AlertTriangle,
   X, Phone, Mail,
@@ -10,7 +11,19 @@ import {
 export default function ReferralPartners() {
   const { state, addPartner, updatePartner, addAuditEntry, resolveAlert } = useAppState();
   const { showToast } = useToast();
-  const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const deepLinkPartner = searchParams.get('partner');
+  const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(deepLinkPartner);
+
+  // Deep link: ?partner=p1 scrolls to that partner
+  useEffect(() => {
+    if (deepLinkPartner) {
+      setTimeout(() => {
+        const el = document.getElementById(`partner-${deepLinkPartner}`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 200);
+    }
+  }, [deepLinkPartner]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showFollowUpModal, setShowFollowUpModal] = useState<string | null>(null);
   const [followUpNotes, setFollowUpNotes] = useState('');

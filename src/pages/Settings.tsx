@@ -157,7 +157,7 @@ export default function SettingsPage() {
       {/* Production Readiness Checklist */}
       <div className="card mb-5">
         <div className="card-header"><Shield size={16} className="text-advisa-accent" />Production Readiness Checklist</div>
-        <p className="text-xs text-slate-500 mb-4">Track what's needed to move from demo to production-ready HIPAA-compliant system.</p>
+        <p className="text-xs text-slate-500 mb-4">Track what's needed to move from demo to a production-ready system with appropriate security and compliance controls.</p>
 
         <div className="space-y-2">
           {state.productionReadiness.map(item => (
@@ -197,7 +197,7 @@ export default function SettingsPage() {
           <AlertTriangle size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-bold text-amber-800">Demo Data Only</p>
-            <p className="text-xs text-amber-700 mt-1">This application uses simulated data stored in your browser's localStorage. No real PHI is processed. Before any production use, complete the HIPAA production readiness checklist above.</p>
+            <p className="text-xs text-amber-700 mt-1">This application uses simulated data stored in your browser's localStorage. No real patient data is processed. Before any production use, complete the production readiness checklist above and obtain appropriate security and compliance reviews.</p>
           </div>
         </div>
       </div>

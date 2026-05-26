@@ -1,12 +1,13 @@
-import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AppProvider, useAppState } from './context/AppContext';
 import { ToastProvider, useToast } from './components/Toast';
-import { useState, useMemo, useCallback } from 'react';
-import { allRoutes, canAccessRoute } from './lib/permissions';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { allRoutes, canAccessRoute, getFirstAllowedRoute } from './lib/permissions';
+import { activeAlertCount } from './lib/alertEngine';
 import {
   LayoutDashboard, ClipboardList, Users, ShieldCheck, Smartphone,
   Star, Handshake, Settings, FileSearch, Bell, AlertTriangle,
-  ChevronRight, Shield, Eye, Check, X, Menu, XCircle,
+  ChevronRight, Shield, Eye, Check, X, Menu, XCircle, HeartPulse,
 } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Referrals from './pages/Referrals';
@@ -14,6 +15,7 @@ import Staffing from './pages/Staffing';
 import Compliance from './pages/Compliance';
 import FieldAssistant from './pages/FieldAssistant';
 import Quality from './pages/Quality';
+import CatastrophicCare from './pages/CatastrophicCare';
 import ReferralPartners from './pages/ReferralPartners';
 import SettingsPage from './pages/Settings';
 import AuditLog from './pages/AuditLog';
@@ -26,6 +28,7 @@ const routeComponents: Record<string, React.ComponentType> = {
   '/compliance': Compliance,
   '/field-assistant': FieldAssistant,
   '/quality': Quality,
+  '/catastrophic-care': CatastrophicCare,
   '/referral-partners': ReferralPartners,
   '/settings': SettingsPage,
   '/audit-log': AuditLog,
@@ -33,10 +36,13 @@ const routeComponents: Record<string, React.ComponentType> = {
 
 const iconMap: Record<string, React.ComponentType<{ className?: string; size?: number }>> = {
   LayoutDashboard, ClipboardList, Users, ShieldCheck, Smartphone,
-  Star, Handshake, Settings, FileSearch,
+  Star, Handshake, Settings, FileSearch, HeartPulse,
 };
 
-// Map source record types to navigation paths
+/**
+ * Map sourceRecordType → base route path.
+ * View Source appends query params for exact record navigation.
+ */
 const sourceRouteMap: Record<string, string> = {
   Referral: '/referrals',
   Staff: '/staffing',
@@ -49,6 +55,48 @@ const sourceRouteMap: Record<string, string> = {
   Alert: '/',
   System: '/',
 };
+
+/** Query param keys per source record type for View Source deep linking */
+const sourceParamMap: Record<string, string> = {
+  Referral: 'ref',
+  Compliance: 'item',
+  Visit: 'visit',
+  Quality: 'qid',
+  Partner: 'partner',
+  Shift: 'shift',
+  Document: 'doc',
+};
+
+/**
+ * Fix #6 — given an alert, compute the View Source destination.
+ *
+ *  - Catastrophic-flagged shift alerts (metadata.caseId present, or type starts with
+ *    "Catastrophic ") route to /catastrophic-care?case=CASE_ID. This includes the
+ *    "Catastrophic Uncovered Shift" alert from the alert engine.
+ *  - Plain shift alerts route to /staffing?shift=SHIFT_ID.
+ *  - Everything else uses the source-record map above.
+ *
+ * Centralised so the notification center and any other consumer share the same logic.
+ */
+export function resolveAlertHref(alert: {
+  type: string;
+  sourceRecordType: string;
+  sourceRecordId: string;
+  metadata?: { caseId?: string };
+}): string {
+  if (alert.metadata?.caseId) {
+    return `/catastrophic-care?case=${encodeURIComponent(alert.metadata.caseId)}`;
+  }
+  if (alert.type && alert.type.startsWith('Catastrophic ')) {
+    // Catastrophic alert without metadata — fall back to the catastrophic page.
+    return `/catastrophic-care`;
+  }
+  const basePath = sourceRouteMap[alert.sourceRecordType] || '/';
+  const paramKey = sourceParamMap[alert.sourceRecordType];
+  return paramKey
+    ? `${basePath}?${paramKey}=${encodeURIComponent(alert.sourceRecordId)}`
+    : basePath;
+}
 
 function NotificationCenter({ onClose }: { onClose: () => void }) {
   const { state, acknowledgeAlert, resolveAlert, addAuditEntry } = useAppState();
@@ -72,19 +120,31 @@ function NotificationCenter({ onClose }: { onClose: () => void }) {
 
   const handleAcknowledge = (id: string) => {
     acknowledgeAlert(id);
-    addAuditEntry({ user: state.currentUser.name, role: state.currentUser.role, action: 'Updated', recordType: 'Alert', recordId: id, details: 'Alert acknowledged' });
+    addAuditEntry({
+      user: state.currentUser.name, role: state.currentUser.role,
+      action: 'Updated', recordType: 'Alert', recordId: id,
+      details: 'Alert acknowledged',
+    });
     showToast('Alert acknowledged', 'info');
   };
 
   const handleResolve = (id: string) => {
     resolveAlert(id);
-    addAuditEntry({ user: state.currentUser.name, role: state.currentUser.role, action: 'Updated', recordType: 'Alert', recordId: id, details: 'Alert resolved' });
+    addAuditEntry({
+      user: state.currentUser.name, role: state.currentUser.role,
+      action: 'Updated', recordType: 'Alert', recordId: id,
+      details: 'Alert resolved',
+    });
     showToast('Alert resolved', 'success');
   };
 
-  const handleViewSource = (sourceType: string) => {
-    const path = sourceRouteMap[sourceType] || '/';
-    navigate(path);
+  const handleViewSource = (alert: {
+    type: string;
+    sourceRecordType: string;
+    sourceRecordId: string;
+    metadata?: { caseId?: string };
+  }) => {
+    navigate(resolveAlertHref(alert));
     onClose();
   };
 
@@ -132,7 +192,7 @@ function NotificationCenter({ onClose }: { onClose: () => void }) {
                       </div>
                       <div className="flex gap-1.5 mt-2">
                         <button
-                          onClick={() => handleViewSource(alert.sourceRecordType)}
+                          onClick={() => handleViewSource(alert)}
                           className="inline-flex items-center gap-1 px-2 py-1 bg-white/60 hover:bg-white rounded border border-current/10 text-[10px] font-medium"
                         >
                           <Eye size={10} />View Source
@@ -167,20 +227,39 @@ function NotificationCenter({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** Redirect guard: if current path is not allowed for current role, redirect to first allowed route */
+function RoleRedirect() {
+  const { state } = useAppState();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!canAccessRoute(location.pathname, state.currentUser.role)) {
+      const target = getFirstAllowedRoute(state.currentUser.role);
+      navigate(target, { replace: true });
+    }
+  }, [state.currentUser.role, location.pathname, navigate]);
+
+  return null;
+}
+
 function AppContent() {
   const { state } = useAppState();
   const [showNotifications, setShowNotifications] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const unacknowledgedCount = useMemo(() =>
-    state.alerts.filter(a => !a.resolved && !a.acknowledged).length,
+    activeAlertCount(state.alerts),
     [state.alerts]
   );
 
   const canAccess = useCallback((path: string) => canAccessRoute(path, state.currentUser.role), [state.currentUser.role]);
 
   const ProtectedRoute = ({ element, path }: { element: React.ReactNode; path: string }) => {
-    if (!canAccess(path)) return <Navigate to="/" replace />;
+    if (!canAccess(path)) {
+      const target = getFirstAllowedRoute(state.currentUser.role);
+      return <Navigate to={target} replace />;
+    }
     return <>{element}</>;
   };
 
@@ -245,7 +324,7 @@ function AppContent() {
       <div className="px-4 py-3 border-t border-white/10">
         <div className="flex items-center gap-2 text-[10px] text-slate-400">
           <ShieldCheck size={12} />
-          <span>HIPAA-Conscious Prototype</span>
+          <span>Prototype — Demo Data Only</span>
         </div>
       </div>
     </>
@@ -253,6 +332,7 @@ function AppContent() {
 
   return (
     <BrowserRouter>
+      <RoleRedirect />
       <div className="min-h-screen bg-advisa-surface flex">
         {/* Desktop Sidebar */}
         <aside className="w-[260px] bg-gradient-to-b from-advisa-primary to-advisa-secondary text-white hidden md:flex md:flex-col shadow-sidebar flex-shrink-0">
@@ -279,7 +359,7 @@ function AppContent() {
               </button>
               <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
                 <AlertTriangle size={14} className="flex-shrink-0" />
-                <span className="font-medium hidden sm:inline">Prototype only — demo data — not for production use without HIPAA review</span>
+                <span className="font-medium hidden sm:inline">Prototype only — simulated data — not for production use</span>
                 <span className="font-medium sm:hidden">Demo only</span>
               </div>
             </div>

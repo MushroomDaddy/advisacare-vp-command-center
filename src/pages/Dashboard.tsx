@@ -1,6 +1,7 @@
 import { useAppState } from '../context/AppContext';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getComplianceCategory } from '../lib/complianceUtils';
 import {
   LayoutDashboard, ClipboardList, Users, ShieldCheck, Smartphone,
   Star, Handshake, AlertTriangle, Clock, ArrowRight, TrendingUp,
@@ -8,7 +9,7 @@ import {
 } from 'lucide-react';
 
 export default function Dashboard() {
-  const { state, getComplianceStatus } = useAppState();
+  const { state } = useAppState();
   const navigate = useNavigate();
 
   const stats = useMemo(() => {
@@ -16,8 +17,9 @@ export default function Dashboard() {
     const missingDocs = state.referrals.filter(r => r.stage === 'Missing Docs');
     const needStaffing = state.referrals.filter(r => r.stage === 'Staffing');
     const openShifts = state.shifts.filter(s => s.status === 'Open');
-    const expiredCompliance = state.compliance.filter(c => getComplianceStatus(c) === 'Expired');
-    const dueSoonCompliance = state.compliance.filter(c => getComplianceStatus(c) === 'Due Soon');
+    const expiredCompliance = state.compliance.filter(c => getComplianceCategory(c.expiryDate) === 'Expired');
+    const criticalSoonCompliance = state.compliance.filter(c => getComplianceCategory(c.expiryDate) === 'Critical Soon');
+    const dueSoonCompliance = state.compliance.filter(c => getComplianceCategory(c.expiryDate) === 'Due Soon');
     const pendingVisits = state.visits.filter(v => v.documentationStatus !== 'Complete');
     const overdueVisits = state.visits.filter(v => v.documentationStatus === 'Overdue');
     const openQuality = state.quality.filter(q => q.status === 'Open' && q.priority === 'High');
@@ -38,10 +40,10 @@ export default function Dashboard() {
 
     return {
       urgentReferrals, missingDocs, needStaffing, openShifts,
-      expiredCompliance, dueSoonCompliance, pendingVisits, overdueVisits,
+      expiredCompliance, criticalSoonCompliance, dueSoonCompliance, pendingVisits, overdueVisits,
       openQuality, criticalAlerts, unacknowledgedAlerts, avgSOC, active, overduePartners,
     };
-  }, [state, getComplianceStatus]);
+  }, [state]);
 
   // Pipeline distribution for referrals
   const pipelineStages = ['New', 'Missing Docs', 'Eligibility', 'Staffing', 'Scheduled', 'Started', 'Declined'];
@@ -113,7 +115,7 @@ export default function Dashboard() {
           <p className={`stat-value ${stats.expiredCompliance.length > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
             {stats.expiredCompliance.length > 0 ? `${stats.expiredCompliance.length} expired` : 'All clear'}
           </p>
-          <p className="text-[10px] text-amber-600 mt-1">{stats.dueSoonCompliance.length} due soon</p>
+          <p className="text-[10px] text-amber-600 mt-1">{stats.criticalSoonCompliance.length} critical soon · {stats.dueSoonCompliance.length} due soon</p>
         </div>
 
         <div className="stat-card">
