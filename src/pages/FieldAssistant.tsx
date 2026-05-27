@@ -288,32 +288,60 @@ export default function FieldAssistant() {
                 }`}
                 onClick={() => setSelectedVisit(selectedVisit === visit.id ? null : visit.id)}
               >
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="font-semibold text-sm text-slate-800">{visit.patientInitials}</p>
-                      <span className="badge badge-neutral">{visit.serviceType}</span>
-                      <span className={`badge ${getEvvBadge(visit.evvStatus)}`}>{visit.evvStatus}</span>
+                {/* Header — patient + service type, status pill on the right.
+                    EVV status and meta details stack vertically below so badges
+                    don't pile on a single line on mobile. */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-2 mb-1">
+                      <p className="font-semibold text-sm text-clinical-text">{visit.patientInitials}</p>
+                      <span className="text-[11px] text-clinical-muted">· {visit.serviceType}</span>
                     </div>
-                    <p className="text-xs text-slate-500 flex items-center gap-1"><Clock size={11} />{visit.time} · {visit.staffName}</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1"><MapPin size={10} />{visit.address}</p>
+                    <p className="text-xs text-clinical-muted flex items-center gap-1.5"><Clock size={11} />{visit.time} · {visit.staffName}</p>
+                    <p className="text-[11px] text-clinical-faint mt-0.5 flex items-center gap-1.5"><MapPin size={10} />{visit.address}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`badge ${
-                      visit.documentationStatus === 'Complete' ? 'badge-success' :
-                      visit.documentationStatus === 'Pending' ? 'badge-warning' : 'badge-urgent'
-                    }`}>{visit.documentationStatus}</span>
-                    <ChevronRight size={14} className={`text-slate-400 transition-transform ${selectedVisit === visit.id ? 'rotate-90' : ''}`} />
+                  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                    {/* Documentation status — single signal pill */}
+                    <span className={`pill ${
+                      visit.documentationStatus === 'Complete' ? 'pill-success' :
+                      visit.documentationStatus === 'Pending' ? 'pill-warning' : 'pill-critical'
+                    } text-[10px]`}>
+                      <span className="pill-dot" />
+                      {visit.documentationStatus}
+                    </span>
+                    <ChevronRight size={14} className={`text-clinical-muted transition-transform ${selectedVisit === visit.id ? 'rotate-90' : ''}`} />
                   </div>
                 </div>
 
-                <div className="mt-2.5">
-                  <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                {/* EVV status row — sits below the header, doesn't compete with the
+                    documentation pill */}
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-mono text-clinical-muted uppercase tracking-wider">EVV</span>
+                  <span className={`pill ${
+                    visit.evvStatus === 'Clocked Out' ? 'pill-success' :
+                    visit.evvStatus === 'Clocked In' ? 'pill-warning' :
+                    visit.evvStatus === 'Exception' ? 'pill-critical' : 'pill-neutral'
+                  } text-[10px]`}>
+                    <span className="pill-dot" />
+                    {visit.evvStatus}
+                  </span>
+                </div>
+
+                {/* Checklist progress — gradient fill bar */}
+                <div className="mt-3">
+                  <div className="flex justify-between text-[10px] text-clinical-muted mb-1">
                     <span>Checklist progress</span>
-                    <span>{visit.checklist.filter(i => i.completed).length}/{visit.checklist.length}</span>
+                    <span className="font-mono">{visit.checklist.filter(i => i.completed).length}/{visit.checklist.length}</span>
                   </div>
-                  <div className="w-full bg-slate-100 rounded-full h-1.5">
-                    <div className="bg-advisa-accent h-1.5 rounded-full transition-all" style={{ width: `${(visit.checklist.filter(i => i.completed).length / visit.checklist.length) * 100}%` }} />
+                  <div className="w-full bg-advisa-border-light rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="h-1.5 rounded-full transition-all"
+                      style={{
+                        width: `${(visit.checklist.filter(i => i.completed).length / visit.checklist.length) * 100}%`,
+                        background: 'linear-gradient(90deg, #0B6F72 0%, #9BB83F 100%)',
+                        boxShadow: 'inset 0 -1px 0 rgba(0,0,0,.10)',
+                      }}
+                    />
                   </div>
                 </div>
               </div>

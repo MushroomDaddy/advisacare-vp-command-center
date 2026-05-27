@@ -59,6 +59,37 @@
   height: 6px;
 }
 
+/* Soft reveal — cards fade-in-up on first paint. Applied selectively
+ * so the page reads as alive, not bouncy. */
+@keyframes advisa-reveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  @keyframes advisa-reveal { from, to { opacity: 1; transform: none; } }
+}
+.animate-reveal {
+  animation: advisa-reveal 0.45s cubic-bezier(.16,1,.3,1) both;
+}
+
+/* Scroll-hint: a subtle right-edge fade on horizontal scrollers so the
+ * user can SEE there's more content to swipe to. */
+.scroll-hint-right {
+  position: relative;
+}
+.scroll-hint-right::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 32px;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.92));
+  border-radius: 0 12px 12px 0;
+  z-index: 2;
+}
+
 /* Subtle grain texture overlay — applied to sidebar */
 .grain-overlay {
   position: absolute;
@@ -71,6 +102,12 @@
 
 @layer components {
   /* ─── Cards (multi-layer shadow + inner gradient surface + top sheen) ── */
+  /* Note: we deliberately do NOT set overflow:hidden on .card. That broke
+   * mobile horizontal scrolling on cards that contain a .table-wrap. The
+   * gradient sheen ::before is absolutely positioned at the top edge with
+   * left/right insets, so it sits within the card bounds without needing
+   * clipping. Rounded corners still work because the .card itself has its
+   * own background. */
   .card {
     @apply rounded-card border border-advisa-border p-5;
     background: linear-gradient(180deg, #FFFFFF 0%, #FBFCFC 100%);
@@ -79,7 +116,6 @@
       0 1px 3px rgba(6,73,79,.06);
     transition: box-shadow 0.25s cubic-bezier(.16,1,.3,1), transform 0.2s cubic-bezier(.16,1,.3,1);
     position: relative;
-    overflow: hidden;
   }
   .card::before {
     /* Hairline gradient sheen across the top edge */
@@ -91,6 +127,7 @@
     height: 1px;
     background: linear-gradient(90deg, transparent, rgba(155,184,63,.35), transparent);
     pointer-events: none;
+    z-index: 1;
   }
   .card:hover {
     box-shadow:
@@ -279,10 +316,26 @@
   }
 
   /* ─── Tables ─────────────────────────────────────────────────── */
+  /* Bulletproof horizontal scroll for tables that are wider than the
+   * viewport. width:100% + overflow-x:auto guarantees the inner table
+   * (with min-w) creates a horizontal scrollbar within the wrapper,
+   * regardless of the outer card's overflow. touch-action: pan-x tells
+   * mobile browsers (especially Samsung Internet, Android Chrome) that
+   * horizontal pan is the intended gesture. */
   .table-wrap {
-    @apply overflow-x-auto;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    /* Reserve a thin scrollbar groove so the row underline doesn't shift
+     * when scrollbars appear */
+    scrollbar-width: thin;
   }
+  .table-wrap::-webkit-scrollbar { height: 6px; width: 6px; }
+  .table-wrap::-webkit-scrollbar-thumb { background: #C8D6D3; border-radius: 3px; }
+  .table-wrap::-webkit-scrollbar-thumb:hover { background: #9BAEAB; }
   .table-head {
     background: linear-gradient(180deg, #F6FAF8, #EEF3F1);
     color: #46555A;

@@ -211,31 +211,39 @@ export default function ReferralPartners() {
               className={`card cursor-pointer transition-all ${selectedPartnerId === partner.id ? 'ring-2 ring-advisa-accent' : 'hover:shadow-card-hover'}`}
               onClick={() => setSelectedPartnerId(selectedPartnerId === partner.id ? null : partner.id)}
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-bold text-sm text-slate-800">{partner.name}</h3>
-                    <span className="badge badge-neutral">{partner.type}</span>
-                    <span className={`badge ${getRiskBadge(partner.riskLabel || 'Healthy')}`}>{partner.riskLabel}</span>
-                  </div>
-                  <div className="grid grid-cols-4 gap-3 mt-2 text-xs">
-                    <div><p className="stat-label">Volume</p><p className="font-bold text-slate-800">{partner.volume}</p></div>
-                    <div><p className="stat-label">Conversion</p><p className="font-bold text-emerald-600">{(partner.conversionRate * 100).toFixed(0)}%</p></div>
-                    <div><p className="stat-label">Decline Rate</p><p className={`font-bold ${(partner.declineRate || 0) > 0.1 ? 'text-red-600' : 'text-slate-600'}`}>{((partner.declineRate || 0) * 100).toFixed(0)}%</p></div>
-                    <div><p className="stat-label">Avg SOC</p><p className="font-bold text-slate-700">{partner.avgTimeToSOC}</p></div>
-                  </div>
+              {/* Header — name + type/risk pills wrap on mobile, follow-up
+                  status moves to a SEPARATE row on mobile so it never
+                  overlaps the Follow Up button. */}
+              <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
+                  <h3 className="font-bold text-sm text-clinical-text truncate max-w-full">{partner.name}</h3>
+                  <span className="badge badge-neutral text-[10px]">{partner.type}</span>
+                  <span className={`badge ${getRiskBadge(partner.riskLabel || 'Healthy')} text-[10px]`}>{partner.riskLabel}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  {isFollowUpOverdue(partner.nextFollowUp) && (
-                    <span className="badge badge-urgent text-[9px]"><AlertTriangle size={9} />Follow-up overdue</span>
-                  )}
-                  <button
-                    onClick={e => { e.stopPropagation(); setShowFollowUpModal(partner.id); setFollowUpNotes(''); }}
-                    className="btn-secondary text-xs py-1 gap-1"
-                  >
-                    <Calendar size={11} />Follow Up
-                  </button>
+                <button
+                  onClick={e => { e.stopPropagation(); setShowFollowUpModal(partner.id); setFollowUpNotes(''); }}
+                  className="btn-secondary text-xs py-1.5 px-3 gap-1 flex-shrink-0"
+                >
+                  <Calendar size={11} />Follow Up
+                </button>
+              </div>
+
+              {/* Follow-up status — its own row, never overlaps */}
+              {isFollowUpOverdue(partner.nextFollowUp) && (
+                <div className="mb-3">
+                  <span className="pill pill-critical text-[10px]">
+                    <span className="pill-dot" />
+                    Follow-up overdue · next due {partner.nextFollowUp}
+                  </span>
                 </div>
+              )}
+
+              {/* Stats grid — 2-col on mobile, 4-col on sm+ */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div><p className="stat-label">Volume</p><p className="font-bold text-clinical-text mt-0.5">{partner.volume}</p></div>
+                <div><p className="stat-label">Conversion</p><p className="font-bold text-emerald-600 mt-0.5">{(partner.conversionRate * 100).toFixed(0)}%</p></div>
+                <div><p className="stat-label">Decline Rate</p><p className={`font-bold mt-0.5 ${(partner.declineRate || 0) > 0.1 ? 'text-red-600' : 'text-clinical-muted'}`}>{((partner.declineRate || 0) * 100).toFixed(0)}%</p></div>
+                <div><p className="stat-label">Avg SOC</p><p className="font-bold text-clinical-muted mt-0.5">{partner.avgTimeToSOC}</p></div>
               </div>
 
               {/* Trend Sparkline */}
