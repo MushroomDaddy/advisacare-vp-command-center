@@ -166,28 +166,51 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Referral Pipeline */}
+      {/* Referral Pipeline — gradient bars with shine, Started/Declined get
+          accent colors so the final stages read distinctly. */}
       <div className="card mb-5">
         <div className="card-header">
           <ClipboardList size={16} className="text-advisa-accent" />
           Referral Pipeline
         </div>
         <div className="flex gap-2 items-end h-24">
-          {pipeline.map(stage => (
-            <div key={stage.name} className="flex-1 flex flex-col items-center gap-1">
-              <span className="text-xs font-bold text-slate-800">{stage.count}</span>
-              <div
-                className="w-full bg-advisa-accent/20 rounded-t-lg transition-all"
-                style={{ height: `${Math.max(8, (stage.count / maxPipeline) * 64)}px`, backgroundColor: stage.name === 'Declined' ? '#fca5a5' : undefined }}
-              />
-              <span className="text-[9px] text-slate-500 text-center leading-tight">{stage.name}</span>
-            </div>
-          ))}
+          {pipeline.map(stage => {
+            const heightPx = Math.max(8, (stage.count / maxPipeline) * 64);
+            // Gradient mapping per stage: lime for Started (success), red for
+            // Declined (terminal), teal for everything else.
+            let bg = 'linear-gradient(180deg, #0B6F72 0%, #06494F 100%)';
+            if (stage.name === 'Started')  bg = 'linear-gradient(180deg, #ACCB4D 0%, #86A832 100%)';
+            if (stage.name === 'Declined') bg = 'linear-gradient(180deg, #FCA5A5 0%, #DC2626 100%)';
+            return (
+              <div key={stage.name} className="flex-1 flex flex-col items-center gap-1">
+                <span className="text-xs font-bold text-clinical-text tabular-nums">{stage.count}</span>
+                <div
+                  className="w-full rounded-t-lg transition-all relative overflow-hidden"
+                  style={{
+                    height: `${heightPx}px`,
+                    background: bg,
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,.20), inset 0 -1px 0 rgba(0,0,0,.12), 0 1px 2px rgba(6,73,79,.10)',
+                  }}
+                >
+                  {/* Diagonal shine on top half */}
+                  <span
+                    aria-hidden
+                    className="absolute top-0 left-0 right-0 rounded-t-lg pointer-events-none"
+                    style={{
+                      height: '50%',
+                      background: 'linear-gradient(180deg, rgba(255,255,255,.16), transparent)',
+                    }}
+                  />
+                </div>
+                <span className="text-[9px] text-clinical-muted text-center leading-tight">{stage.name}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {/* Urgent Items */}
+        {/* Urgent Items — single-signal cards: tone rail + pill, neutral row bg */}
         <div className="card">
           <div className="card-header">
             <AlertTriangle size={16} className="text-red-500" />
@@ -195,56 +218,97 @@ export default function Dashboard() {
           </div>
           <div className="space-y-2 max-h-64 overflow-y-auto">
             {stats.urgentReferrals.map(r => (
-              <div key={r.id} onClick={() => navigate('/referrals')} className="flex items-center justify-between p-2.5 bg-red-50 rounded-lg text-xs cursor-pointer hover:bg-red-100">
-                <div>
-                  <p className="font-semibold text-red-700">{r.patientInitials} — {r.serviceType}</p>
-                  <p className="text-red-500 text-[10px]">{r.stage} · {r.source}</p>
+              <button
+                key={r.id}
+                onClick={() => navigate(`/referrals?ref=${encodeURIComponent(r.id)}`)}
+                className="w-full flex items-center justify-between gap-2 p-3 rounded-lg text-xs text-left bg-white border border-advisa-border-light hover:border-red-200 hover:bg-red-50/40 transition-all relative"
+                style={{ boxShadow: 'inset 3px 0 0 #DC2626' }}
+              >
+                <div className="pl-1 min-w-0 flex-1">
+                  <p className="font-semibold text-clinical-text truncate">{r.patientInitials} — {r.serviceType}</p>
+                  <p className="text-clinical-muted text-[10px] mt-0.5">{r.stage} · {r.source}</p>
                 </div>
-                <ArrowRight size={12} className="text-red-400" />
-              </div>
+                <span className="pill pill-critical flex-shrink-0">
+                  <span className="pill-dot" />
+                  Immediate
+                </span>
+                <ArrowRight size={12} className="text-clinical-muted flex-shrink-0" />
+              </button>
             ))}
             {stats.openShifts.map(s => (
-              <div key={s.id} onClick={() => navigate('/staffing')} className="flex items-center justify-between p-2.5 bg-amber-50 rounded-lg text-xs cursor-pointer hover:bg-amber-100">
-                <div>
-                  <p className="font-semibold text-amber-700">Open Shift: {s.patientInitials}</p>
-                  <p className="text-amber-500 text-[10px]">{s.date} · {s.serviceType}</p>
+              <button
+                key={s.id}
+                onClick={() => navigate(`/staffing?shift=${encodeURIComponent(s.id)}`)}
+                className="w-full flex items-center justify-between gap-2 p-3 rounded-lg text-xs text-left bg-white border border-advisa-border-light hover:border-amber-200 hover:bg-amber-50/40 transition-all relative"
+                style={{ boxShadow: 'inset 3px 0 0 #D97706' }}
+              >
+                <div className="pl-1 min-w-0 flex-1">
+                  <p className="font-semibold text-clinical-text truncate">Open Shift: {s.patientInitials}</p>
+                  <p className="text-clinical-muted text-[10px] mt-0.5">{s.date} · {s.serviceType}</p>
                 </div>
-                <ArrowRight size={12} className="text-amber-400" />
-              </div>
+                <span className="pill pill-warning flex-shrink-0">
+                  <span className="pill-dot" />
+                  Open
+                </span>
+                <ArrowRight size={12} className="text-clinical-muted flex-shrink-0" />
+              </button>
             ))}
             {stats.expiredCompliance.map(c => (
-              <div key={c.id} onClick={() => navigate('/compliance')} className="flex items-center justify-between p-2.5 bg-red-50 rounded-lg text-xs cursor-pointer hover:bg-red-100">
-                <div>
-                  <p className="font-semibold text-red-700">Expired: {c.staffName} — {c.itemType}</p>
-                  <p className="text-red-500 text-[10px]">Blocks assignment</p>
+              <button
+                key={c.id}
+                onClick={() => navigate(`/compliance?item=${encodeURIComponent(c.id)}`)}
+                className="w-full flex items-center justify-between gap-2 p-3 rounded-lg text-xs text-left bg-white border border-advisa-border-light hover:border-red-200 hover:bg-red-50/40 transition-all relative"
+                style={{ boxShadow: 'inset 3px 0 0 #DC2626' }}
+              >
+                <div className="pl-1 min-w-0 flex-1">
+                  <p className="font-semibold text-clinical-text truncate">Expired: {c.staffName} — {c.itemType}</p>
+                  <p className="text-clinical-muted text-[10px] mt-0.5">Blocks shift assignment</p>
                 </div>
-                <ArrowRight size={12} className="text-red-400" />
-              </div>
+                <span className="pill pill-critical flex-shrink-0">
+                  <span className="pill-dot" />
+                  Expired
+                </span>
+                <ArrowRight size={12} className="text-clinical-muted flex-shrink-0" />
+              </button>
             ))}
             {stats.urgentReferrals.length + stats.openShifts.length + stats.expiredCompliance.length === 0 && (
-              <p className="text-center py-6 text-slate-400 text-xs">All clear — no urgent items</p>
+              <p className="text-center py-6 text-clinical-muted text-xs">All clear — no urgent items</p>
             )}
           </div>
         </div>
 
-        {/* Recent Activity */}
+        {/* Recent Activity — refined dots with halo */}
         <div className="card">
           <div className="card-header">
             <Calendar size={16} className="text-advisa-accent" />
             Recent Activity
           </div>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {state.auditLog.slice(0, 8).map(entry => (
-              <div key={entry.id} className="flex items-center gap-2 p-2 text-xs hover:bg-slate-50 rounded-lg">
-                <span className="w-1.5 h-1.5 rounded-full bg-advisa-accent flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-slate-700 truncate">{entry.details || `${entry.action} ${entry.recordType}`}</p>
-                  <p className="text-[10px] text-slate-400">{entry.user} · {new Date(entry.timestamp).toLocaleString()}</p>
+          <div className="space-y-1 max-h-64 overflow-y-auto">
+            {state.auditLog.slice(0, 8).map(entry => {
+              const detail = (entry.details ?? '').toLowerCase();
+              let dotClass = 'bg-clinical-faint';
+              if (detail.includes('expired') || detail.includes('breach') || detail.includes('rejected') || detail.includes('catastrophic')) {
+                dotClass = 'bg-red-500';
+              } else if (detail.includes('overdue') || detail.includes('exception') || detail.includes('warning')) {
+                dotClass = 'bg-amber-500';
+              } else if (detail.includes('accepted') || detail.includes('renewed') || detail.includes('completed') || detail.includes('moved to')) {
+                dotClass = 'bg-advisa-lime';
+              }
+              return (
+                <div key={entry.id} className="flex items-start gap-3 px-2 py-2 text-xs rounded-lg hover:bg-advisa-lime-soft/40 transition-colors">
+                  <span
+                    className={`w-2 h-2 rounded-full ${dotClass} flex-shrink-0 mt-1.5`}
+                    style={{ boxShadow: dotClass === 'bg-red-500' ? '0 0 0 3px rgba(220,38,38,.12)' : '0 0 0 3px rgba(155,184,63,.10)' }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-clinical-text truncate">{entry.details || `${entry.action} ${entry.recordType}`}</p>
+                    <p className="text-[10px] text-clinical-muted mt-0.5">{entry.user} · {new Date(entry.timestamp).toLocaleString()}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {state.auditLog.length === 0 && (
-              <p className="text-center py-6 text-slate-400 text-xs">No activity yet</p>
+              <p className="text-center py-6 text-clinical-muted text-xs">No activity yet</p>
             )}
           </div>
         </div>

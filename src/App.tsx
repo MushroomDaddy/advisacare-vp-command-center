@@ -209,26 +209,58 @@ function AppContent() {
 
   const visibleRoutes = allRoutes.filter(r => canAccess(r.path));
 
+  const userInitials = state.currentUser.name.split(' ').map(n => n[0]).join('');
+
   const sidebarContent = (
     <>
-      {/* Logo */}
-      <div className="px-6 py-5 border-b border-white/10">
+      {/* Brand block — lime monogram + Care Operations CC subtitle */}
+      <div className="relative px-6 py-5 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-advisa-lime rounded-lg flex items-center justify-center shadow-md">
-            <Shield size={20} className="text-white" />
+          <div
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-white relative overflow-hidden"
+            style={{
+              background: 'linear-gradient(135deg, #ACCB4D 0%, #9BB83F 45%, #7FA02D 100%)',
+              boxShadow: '0 6px 14px -2px rgba(155,184,63,.45), inset 0 1px 0 rgba(255,255,255,.30), inset 0 -1px 0 rgba(0,0,0,.10)',
+            }}
+          >
+            <Shield size={20} className="text-white relative z-10" />
+            {/* Glass highlight */}
+            <span
+              aria-hidden
+              className="absolute top-0.5 left-1 right-1 h-2/5 rounded-[6px]"
+              style={{ background: 'linear-gradient(180deg, rgba(255,255,255,.28), transparent)' }}
+            />
           </div>
           <div>
             <h1 className="text-base font-bold tracking-tight leading-tight">AdvisaCare</h1>
-            <p className="text-[10px] font-medium text-advisa-lime uppercase tracking-widest">Care Operations Command Center</p>
+            <p className="text-[10px] font-semibold text-advisa-lime uppercase tracking-[0.18em] mt-0.5">Care Operations CC</p>
           </div>
         </div>
+        {/* Lime accent rule under the brand block */}
+        <span
+          aria-hidden
+          className="absolute left-6 -bottom-px inline-block w-7 h-0.5 rounded-full"
+          style={{ background: '#9BB83F', boxShadow: '0 0 8px rgba(155,184,63,.5)' }}
+        />
       </div>
 
-      {/* User Info */}
+      {/* User Info — gradient avatar with live pulse ring */}
       <div className="px-6 py-4 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center text-xs font-semibold">
-            {state.currentUser.name.split(' ').map(n => n[0]).join('')}
+          <div className="relative">
+            <div className="gravatar gravatar-teal" style={{ width: 34, height: 34, fontSize: 11 }}>
+              {userInitials}
+            </div>
+            {/* Live online pulse */}
+            <span
+              aria-hidden
+              className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
+              style={{
+                background: '#9BB83F',
+                boxShadow: '0 0 0 2px #04363B',
+                animation: 'advisa-pulse 2.2s ease-in-out infinite',
+              }}
+            />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{state.currentUser.name}</p>
@@ -237,8 +269,8 @@ function AppContent() {
         </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+      {/* Navigation — active item gets gradient slice + lime rail + live-pulse dot */}
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto relative">
         <p className="px-3 pb-2 text-[10px] font-semibold text-advisa-lime/70 uppercase tracking-widest">Navigation</p>
         {visibleRoutes.map((link) => {
           const Icon = iconMap[link.icon];
@@ -249,16 +281,44 @@ function AppContent() {
               end={link.path === '/'}
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 group ${
+                [
+                  'relative flex items-center gap-3 px-3 py-2.5 rounded-md text-[13px] font-medium transition-all duration-150 group border-l-[3px]',
                   isActive
-                    ? 'bg-advisa-accent text-white shadow-md shadow-advisa-accent/25 border-l-4 border-advisa-lime'
-                    : 'text-slate-300 hover:bg-white/8 hover:text-white'
-                }`
+                    ? 'text-white border-l-[#9BB83F]'
+                    : 'text-slate-300 hover:bg-white/[0.06] hover:text-white border-l-transparent',
+                ].join(' ')
               }
+              style={undefined}
             >
-              {Icon && <Icon size={17} className="flex-shrink-0" />}
-              <span className="flex-1">{link.label}</span>
-              <ChevronRight size={14} className="opacity-0 group-hover:opacity-50 transition-opacity" />
+              {({ isActive }) => (
+                <>
+                  {isActive && (
+                    <span
+                      aria-hidden
+                      className="absolute inset-0 rounded-md pointer-events-none"
+                      style={{
+                        background: 'linear-gradient(90deg, rgba(155,184,63,.14) 0%, rgba(255,255,255,.06) 60%)',
+                        boxShadow: 'inset 1px 0 0 rgba(155,184,63,.30)',
+                      }}
+                    />
+                  )}
+                  {Icon && <Icon size={17} className="flex-shrink-0 relative z-10" />}
+                  <span className="flex-1 relative z-10">{link.label}</span>
+                  {isActive ? (
+                    <span
+                      aria-hidden
+                      className="relative z-10 w-1.5 h-1.5 rounded-full"
+                      style={{
+                        background: '#9BB83F',
+                        boxShadow: '0 0 6px rgba(155,184,63,.6)',
+                        animation: 'advisa-pulse 2s ease-in-out infinite',
+                      }}
+                    />
+                  ) : (
+                    <ChevronRight size={14} className="opacity-0 group-hover:opacity-50 transition-opacity relative z-10" />
+                  )}
+                </>
+              )}
             </NavLink>
           );
         })}
@@ -274,12 +334,23 @@ function AppContent() {
     </>
   );
 
+  const sidebarBg: React.CSSProperties = {
+    background:
+      'radial-gradient(ellipse 280px 200px at 20% -10%, rgba(155,184,63,.10), transparent 70%),' +
+      'radial-gradient(ellipse 240px 180px at 80% 100%, rgba(21,151,200,.08), transparent 70%),' +
+      'linear-gradient(180deg, #06494F 0%, #04363B 60%, #032A2D 100%)',
+  };
+
   return (
     <BrowserRouter>
       <RoleRedirect />
       <div className="min-h-screen bg-advisa-surface flex">
-        {/* Desktop Sidebar */}
-        <aside className="w-[260px] bg-gradient-to-b from-advisa-primary to-advisa-secondary text-white hidden md:flex md:flex-col shadow-sidebar flex-shrink-0">
+        {/* Desktop Sidebar — aurora gradient + grain texture */}
+        <aside
+          className="w-[260px] text-white hidden md:flex md:flex-col shadow-sidebar flex-shrink-0 relative overflow-hidden"
+          style={sidebarBg}
+        >
+          <span aria-hidden className="grain-overlay" />
           {sidebarContent}
         </aside>
 
@@ -287,7 +358,12 @@ function AppContent() {
         {sidebarOpen && (
           <div className="fixed inset-0 z-50 md:hidden" onClick={() => setSidebarOpen(false)}>
             <div className="absolute inset-0 bg-black/40" />
-            <aside className="relative w-[260px] h-full bg-gradient-to-b from-advisa-primary to-advisa-secondary text-white flex flex-col shadow-sidebar" onClick={e => e.stopPropagation()}>
+            <aside
+              className="relative w-[260px] h-full text-white flex flex-col shadow-sidebar overflow-hidden"
+              style={sidebarBg}
+              onClick={e => e.stopPropagation()}
+            >
+              <span aria-hidden className="grain-overlay" />
               {sidebarContent}
             </aside>
           </div>
@@ -295,26 +371,60 @@ function AppContent() {
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto min-w-0">
-          {/* Top Bar */}
-          <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-advisa-border px-4 md:px-8 py-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <button onClick={() => setSidebarOpen(true)} className="md:hidden p-1.5 hover:bg-slate-100 rounded-lg">
-                <Menu size={20} className="text-slate-600" />
+          {/* Glass command bar — live pulse + reconciled at + alert count */}
+          <header
+            className="sticky top-0 z-10 border-b border-advisa-border px-4 md:px-7 py-3 flex items-center justify-between gap-3"
+            style={{
+              background: 'rgba(245, 248, 247, 0.78)',
+              backdropFilter: 'blur(14px) saturate(140%)',
+              WebkitBackdropFilter: 'blur(14px) saturate(140%)',
+            }}
+          >
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="md:hidden p-1.5 hover:bg-white rounded-lg transition-colors"
+                aria-label="Open navigation"
+              >
+                <Menu size={20} className="text-clinical-text" />
               </button>
-              <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
-                <AlertTriangle size={14} className="flex-shrink-0" />
-                <span className="font-medium hidden sm:inline">Prototype only — simulated data — not for production use</span>
+              <div className="hidden md:flex items-center gap-2 text-[11px] text-clinical-muted font-medium">
+                <span className="live-dot live-dot-sm" />
+                <strong className="text-clinical-text font-semibold">Live</strong>
+                <span>· reconciled {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+              {unacknowledgedCount > 0 && (
+                <>
+                  <span className="hidden md:inline-block w-px h-4 bg-advisa-border" aria-hidden />
+                  <div className="hidden md:flex items-center gap-1 text-[11px] text-clinical-muted">
+                    <strong className="font-semibold text-red-600">{unacknowledgedCount}</strong>
+                    <span>active alerts</span>
+                  </div>
+                </>
+              )}
+              <span className="hidden md:inline-block w-px h-4 bg-advisa-border" aria-hidden />
+              <div
+                className="flex items-center gap-2 text-xs rounded-md px-2.5 py-1 border"
+                style={{ background: 'linear-gradient(180deg,#FEF8DD,#FEF3C7)', borderColor: '#FCD34D', color: '#92400E' }}
+                role="status"
+              >
+                <AlertTriangle size={12} className="flex-shrink-0" />
+                <span className="font-medium hidden sm:inline">Prototype · simulated data</span>
                 <span className="font-medium sm:hidden">Demo only</span>
               </div>
             </div>
 
             <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className="relative p-2 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0"
+              className="relative p-2 hover:bg-white rounded-lg transition-all flex-shrink-0"
+              aria-label="Notifications"
             >
-              <Bell size={18} className="text-slate-500" />
+              <Bell size={18} className="text-clinical-text" />
               {unacknowledgedCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                <span
+                  className="absolute top-0.5 right-0.5 min-w-[18px] h-[18px] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1"
+                  style={{ background: '#DC2626', boxShadow: '0 0 0 2px rgba(245,248,247,.78)' }}
+                >
                   {unacknowledgedCount}
                 </span>
               )}
