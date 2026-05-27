@@ -34,14 +34,14 @@ export default function Staffing() {
     }
   }, [deepLinkShift]);
 
-  const roles = ['All', 'RN', 'LPN', 'HHA', 'CNA', 'PT', 'OT', 'ST'];
-  const availabilities = ['All', 'Available', 'Partially', 'Unavailable'];
-
   useEffect(() => {
     if (selectedStaff && staffDetailRef.current) {
       staffDetailRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }, [selectedStaff]);
+
+  const roles = ['All', 'RN', 'LPN', 'HHA', 'CNA', 'PT', 'OT', 'ST'];
+  const availabilities = ['All', 'Available', 'Partially', 'Unavailable'];
 
   const filteredStaff = useMemo(() => state.staff.filter(s =>
     (filterRole === 'All' || s.role === filterRole) &&
@@ -230,7 +230,7 @@ export default function Staffing() {
             </select>
           </div>
 
-          <div className="card p-0 overflow-hidden mb-5">
+          <div className="card p-0 overflow-hidden mb-5 scroll-hint-right">
             <div className="table-wrap">
             <table className="w-full text-sm min-w-[700px]">
               <thead>

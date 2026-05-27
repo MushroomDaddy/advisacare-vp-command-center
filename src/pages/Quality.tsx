@@ -270,7 +270,7 @@ export default function Quality() {
       </div>
 
       {/* Quality Items Table */}
-      <div className="card p-0 overflow-hidden">
+      <div className="card p-0 overflow-hidden scroll-hint-right">
         <div className="table-wrap">
         <table className="w-full text-sm min-w-[700px]">
           <thead>
