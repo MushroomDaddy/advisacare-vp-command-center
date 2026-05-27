@@ -67,9 +67,8 @@ export default function Dashboard() {
   // Wall-clock "now" lives in state and refreshes every minute. Keeps render
   // pure (no Date.now() at render time) and gives the "Updated 14:32" stamp
   // a live feel without re-rendering the whole page.
-  const [now, setNow] = useState<number>(0);
+  const [now, setNow] = useState<number>(() => Date.now());
   useEffect(() => {
-    setNow(Date.now());
     const id = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(id);
   }, []);
@@ -125,7 +124,7 @@ export default function Dashboard() {
         title: `Catastrophic shift uncovered — ${s.patientInitials}`,
         subtitle: `${s.date} · ${s.time ?? 'Time TBD'} · ${s.serviceType}`,
         why: 'Patient requires continuous skilled coverage. An uncovered catastrophic shift puts the case at clinical and contractual risk.',
-        owner: state.staff.find(st => st.role === 'Catastrophic Care Coordinator')?.name ?? state.currentUser.name,
+        owner: state.staff.find(st => (st.role as string) === 'Catastrophic Care Coordinator')?.name ?? state.currentUser.name,
         viewSourceHref: `/catastrophic-care`,
         takeActionHref: `/staffing?shift=${encodeURIComponent(s.id)}`,
         takeActionLabel: 'Assign Staff',
