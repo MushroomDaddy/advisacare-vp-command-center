@@ -4,13 +4,10 @@ import { ToastProvider, useToast } from './components/Toast';
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { allRoutes, canAccessRoute, getFirstAllowedRoute } from './lib/permissions';
 import { activeAlertCount } from './lib/alertEngine';
-import { resolveAlertHref } from './lib/navigationUtils';
-import Monogram from './components/Monogram';
-import LiveIndicator from './components/LiveIndicator';
 import {
   LayoutDashboard, ClipboardList, Users, ShieldCheck, Smartphone,
   Star, Handshake, Settings, FileSearch, Bell, AlertTriangle,
-  ChevronRight, Eye, Check, X, Menu, XCircle, HeartPulse, Lock, Search,
+  ChevronRight, Shield, Eye, Check, X, Menu, XCircle, HeartPulse, Lock,
 } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Referrals from './pages/Referrals';
@@ -23,6 +20,7 @@ import ReferralPartners from './pages/ReferralPartners';
 import SettingsPage from './pages/Settings';
 import AuditLog from './pages/AuditLog';
 import SecurityChecklist from './pages/SecurityChecklist';
+import { resolveAlertHref } from './lib/navigationUtils';
 import './index.css';
 
 const routeComponents: Record<string, React.ComponentType> = {
@@ -43,9 +41,6 @@ const iconMap: Record<string, React.ComponentType<{ className?: string; size?: n
   LayoutDashboard, ClipboardList, Users, ShieldCheck, Smartphone,
   Star, Handshake, Settings, FileSearch, HeartPulse, Lock,
 };
-
-// View Source routing lives in src/lib/navigationUtils.ts so App.tsx only
-// exports React components (satisfies react-refresh/only-export-components).
 
 function NotificationCenter({ onClose }: { onClose: () => void }) {
   const { state, acknowledgeAlert, resolveAlert, addAuditEntry } = useAppState();
@@ -216,42 +211,35 @@ function AppContent() {
 
   const sidebarContent = (
     <>
-      {/* Brand block — typographic "AC" monogram + "Care Operations CC" */}
-      <div className="px-6 py-5 border-b border-white/10 relative">
+      {/* Logo */}
+      <div className="px-6 py-5 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <Monogram />
+          <div className="w-9 h-9 bg-advisa-lime rounded-lg flex items-center justify-center shadow-md">
+            <Shield size={20} className="text-white" />
+          </div>
           <div>
-            <h1 className="text-[15px] font-bold tracking-tight leading-tight">AdvisaCare</h1>
-            <p
-              className="font-mono text-[9px] font-medium uppercase tracking-[0.20em] mt-1"
-              style={{ color: '#C8DC8B' }}
-            >
-              Care Operations CC
-            </p>
+            <h1 className="text-base font-bold tracking-tight leading-tight">AdvisaCare</h1>
+            <p className="text-[10px] font-medium text-advisa-lime uppercase tracking-widest">Care Operations Command Center</p>
           </div>
         </div>
-        {/* Subtle lime accent rule under the brand block */}
-        <span className="absolute left-6 bottom-2 inline-block w-6 h-0.5 rounded-full" style={{ background: '#9BB83F' }} />
       </div>
 
       {/* User Info */}
       <div className="px-6 py-4 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-white/12 flex items-center justify-center text-xs font-semibold">
+          <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center text-xs font-semibold">
             {state.currentUser.name.split(' ').map(n => n[0]).join('')}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{state.currentUser.name}</p>
-            <p className="text-[11px] font-medium" style={{ color: '#C8DC8B' }}>{state.currentUser.role}</p>
+            <p className="text-[11px] text-advisa-lime font-medium">{state.currentUser.role}</p>
           </div>
         </div>
       </div>
 
-      {/* Navigation — active item gets a lime LEFT BORDER (not a lime fill). */}
+      {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'rgba(200, 220, 139, 0.55)' }}>
-          Navigation
-        </p>
+        <p className="px-3 pb-2 text-[10px] font-semibold text-advisa-lime/70 uppercase tracking-widest">Navigation</p>
         {visibleRoutes.map((link) => {
           const Icon = iconMap[link.icon];
           return (
@@ -261,26 +249,16 @@ function AppContent() {
               end={link.path === '/'}
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
-                [
-                  'relative flex items-center gap-3 px-3 py-2.5 rounded-md text-[13px] font-medium transition-all duration-150 group border-l-[3px]',
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 group ${
                   isActive
-                    ? 'bg-white/10 text-white border-l-[#9BB83F]'
-                    : 'text-[#BCD5D3] hover:bg-white/[0.06] hover:text-white border-l-transparent',
-                ].join(' ')
+                    ? 'bg-advisa-accent text-white shadow-md shadow-advisa-accent/25 border-l-4 border-advisa-lime'
+                    : 'text-slate-300 hover:bg-white/8 hover:text-white'
+                }`
               }
             >
-              {({ isActive }) => (
-                <>
-                  {Icon && <Icon size={17} className="flex-shrink-0" />}
-                  <span className="flex-1">{link.label}</span>
-                  {isActive ? (
-                    /* Lime pulse on the active item — "this view is live" */
-                    <span className="live-dot" aria-hidden />
-                  ) : (
-                    <ChevronRight size={14} className="opacity-0 group-hover:opacity-50 transition-opacity" />
-                  )}
-                </>
-              )}
+              {Icon && <Icon size={17} className="flex-shrink-0" />}
+              <span className="flex-1">{link.label}</span>
+              <ChevronRight size={14} className="opacity-0 group-hover:opacity-50 transition-opacity" />
             </NavLink>
           );
         })}
@@ -288,7 +266,7 @@ function AppContent() {
 
       {/* Footer */}
       <div className="px-4 py-3 border-t border-white/10">
-        <div className="flex items-center gap-2 text-[10px]" style={{ color: '#9AB4B1' }}>
+        <div className="flex items-center gap-2 text-[10px] text-slate-400">
           <ShieldCheck size={12} />
           <span>Prototype — Demo Data Only</span>
         </div>
@@ -317,64 +295,30 @@ function AppContent() {
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto min-w-0">
-          {/* Command bar — live pulse + reconciled timestamp + alert counts,
-              cleaner amber prototype chip, search + bell on the right. */}
-          <header
-            className="sticky top-0 z-10 backdrop-blur-md border-b border-advisa-border px-4 md:px-7 py-3 flex items-center justify-between gap-3"
-            style={{ background: 'rgba(245, 248, 247, 0.92)' }}
-          >
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="md:hidden p-1.5 rounded-lg hover:bg-white"
-                aria-label="Open navigation"
-              >
-                <Menu size={20} style={{ color: '#1F2F33' }} />
+          {/* Top Bar */}
+          <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-advisa-border px-4 md:px-8 py-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setSidebarOpen(true)} className="md:hidden p-1.5 hover:bg-slate-100 rounded-lg">
+                <Menu size={20} className="text-slate-600" />
               </button>
-              <LiveIndicator zone="local" />
-              <span className="hidden md:inline-block w-px h-4 bg-advisa-border" aria-hidden />
-              <div className="hidden md:flex items-center gap-2 font-mono text-[11px] font-medium text-advisa-text-muted">
-                <strong className="font-semibold" style={{ color: unacknowledgedCount > 0 ? '#DC2626' : '#1F2F33' }}>
-                  {unacknowledgedCount}
-                </strong>
-                <span>active alerts</span>
-              </div>
-              <span className="hidden md:inline-block w-px h-4 bg-advisa-border" aria-hidden />
-              <div
-                className="flex items-center gap-2 text-xs rounded-md px-2.5 py-1 border"
-                style={{ background: '#FEF3C7', borderColor: '#FCD34D', color: '#92400E' }}
-                role="status"
-              >
-                <AlertTriangle size={12} className="flex-shrink-0" />
-                <span className="font-medium hidden sm:inline">Prototype · simulated data</span>
+              <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                <AlertTriangle size={14} className="flex-shrink-0" />
+                <span className="font-medium hidden sm:inline">Prototype only — simulated data — not for production use</span>
                 <span className="font-medium sm:hidden">Demo only</span>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <button
-                className="p-2 rounded-lg transition-colors hover:bg-white"
-                aria-label="Search"
-                onClick={() => { /* placeholder for future search */ }}
-              >
-                <Search size={17} style={{ color: '#1F2F33' }} />
-              </button>
-              <button
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="relative p-2 rounded-lg transition-colors flex-shrink-0 hover:bg-white"
-                aria-label="Notifications"
-              >
-                <Bell size={17} style={{ color: '#1F2F33' }} />
-                {unacknowledgedCount > 0 && (
-                  <span
-                    className="absolute top-0.5 right-0.5 min-w-[17px] h-[17px] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 ring-2 ring-[rgba(245,248,247,0.92)]"
-                    style={{ background: '#DC2626' }}
-                  >
-                    {unacknowledgedCount}
-                  </span>
-                )}
-              </button>
-            </div>
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative p-2 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0"
+            >
+              <Bell size={18} className="text-slate-500" />
+              {unacknowledgedCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                  {unacknowledgedCount}
+                </span>
+              )}
+            </button>
           </header>
 
           {/* Notification Center */}

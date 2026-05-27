@@ -85,6 +85,6 @@
 - [ ] EMR/EHR integration
 - [ ] Insurance verification API
 - [ ] SMS/email notifications
-- [ ] Reporting and analytics dashboard
-- [ ] Mobile-responsive field assistant
-- [ ] HIPAA-compliant infrastructure (if moving to production)
+- [ ] Advanced reporting and analytics dashboards
+- [ ] Dedicated native/mobile app hardening for field users
+- [ ] HIPAA/security-reviewed production infrastructure, BAAs, MFA, server-side RBAC, immutable audit logging, backups, and legal/compliance approval
