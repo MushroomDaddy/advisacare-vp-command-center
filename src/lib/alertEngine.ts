@@ -109,13 +109,13 @@ export function deriveAlerts(state: AppState): DerivedAlert[] {
     }
   }
 
-  // 6. EVV exceptions
+  // 6. Visit verification exceptions
   for (const visit of state.visits) {
     if (visit.evvStatus === 'Exception' && visit.evvException) {
       derived.push({
-        type: 'EVV Exception',
+        type: 'Visit Verification Exception',
         severity: 'Medium',
-        message: `EVV exception for ${visit.patientInitials}: ${visit.evvException}`,
+        message: `Visit Verification Exception for ${visit.patientInitials}: ${visit.evvException}`,
         sourceRecordType: 'Visit',
         sourceRecordId: visit.id,
       });

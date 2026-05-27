@@ -182,7 +182,7 @@ describe('Fix #2 — View Source deep linking', () => {
 
   it('routes a visit alert to /field-assistant?visit=ID', () => {
     expect(resolveAlertHref({
-      type: 'EVV Exception', sourceRecordType: 'Visit', sourceRecordId: 'v-1',
+      type: 'Visit Verification Exception', sourceRecordType: 'Visit', sourceRecordId: 'v-1',
     })).toBe('/field-assistant?visit=v-1');
   });
 
@@ -233,14 +233,14 @@ describe('Fix #3 — Field Assistant EVV validation', () => {
     expect(screen.getByTestId('evv-gate-msg').textContent).toMatch(/checklist/i);
   });
 
-  it('blocks "EVV Exception" when checklist is incomplete after clock-in', async () => {
+  it('blocks "Visit Verification Exception" when checklist is incomplete after clock-in', async () => {
     renderWithProviders(<FieldAssistant />, '/field-assistant');
 
     const firstVisit = screen.getAllByText(/[A-Z]\.[A-Z]\./)[0];
     fireEvent.click(firstVisit);
     fireEvent.click(await screen.findByRole('button', { name: /Start Visit/i }));
 
-    const evvBtn = await screen.findByRole('button', { name: /EVV Exception/i });
+    const evvBtn = await screen.findByRole('button', { name: /Visit Verification Exception/i });
     expect(evvBtn).toBeDisabled();
   });
 
@@ -263,7 +263,7 @@ describe('Fix #3 — Field Assistant EVV validation', () => {
     await waitFor(() => expect(endBtn).not.toBeDisabled());
   });
 
-  it('allows EVV Exception once checklist is complete', async () => {
+  it('allows Visit Verification Exception once checklist is complete', async () => {
     renderWithProviders(<FieldAssistant />, '/field-assistant');
 
     const firstVisit = screen.getAllByText(/[A-Z]\.[A-Z]\./)[0];
@@ -275,7 +275,7 @@ describe('Fix #3 — Field Assistant EVV validation', () => {
       if (!(cb as HTMLInputElement).checked) fireEvent.click(cb);
     }
 
-    const evvBtn = await screen.findByRole('button', { name: /EVV Exception/i });
+    const evvBtn = await screen.findByRole('button', { name: /Visit Verification Exception/i });
     await waitFor(() => expect(evvBtn).not.toBeDisabled());
   });
 });

@@ -159,18 +159,18 @@ export default function FieldAssistant() {
     clockOutVisit(selectedVisit, false, evvExceptionNote);
 
     createAlert({
-      type: 'EVV Exception', severity: 'High',
-      message: `EVV exception for ${selectedVisitData.patientInitials}: ${evvExceptionNote}`,
+      type: 'Visit Verification Exception', severity: 'High',
+      message: `Visit Verification Exception for ${selectedVisitData.patientInitials}: ${evvExceptionNote}`,
       sourceRecordType: 'Visit', sourceRecordId: selectedVisit,
     });
 
     addAuditEntry({
       user: state.currentUser.name, role: state.currentUser.role,
       action: 'Updated', recordType: 'Visit', recordId: selectedVisit,
-      details: `EVV EXCEPTION: ${evvExceptionNote} for ${selectedVisitData.patientInitials}`,
+      details: `Visit Verification Exception: ${evvExceptionNote} for ${selectedVisitData.patientInitials}`,
     });
 
-    showToast('EVV exception logged — alert created', 'warning');
+    showToast('Visit Verification Exception logged — alert created', 'warning');
     setShowEvvExceptionModal(false);
     setEvvExceptionNote('');
     setShowSignatureModal(false);
@@ -380,11 +380,11 @@ export default function FieldAssistant() {
                       <button
                         onClick={openEvvExceptionModal}
                         disabled={!!evvGateBlocker}
-                        title={evvGateBlocker || 'File an EVV exception'}
-                        aria-label="EVV Exception"
+                        title={evvGateBlocker || 'File a Visit Verification Exception'}
+                        aria-label="Visit Verification Exception"
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border ${evvGateBlocker ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200'}`}
                       >
-                        <AlertTriangle size={11} />EVV Exception
+                        <AlertTriangle size={11} />Visit Verification Exception
                       </button>
                     </>
                   )}
@@ -514,21 +514,21 @@ export default function FieldAssistant() {
                 Complete Visit
               </button>
               <button onClick={openEvvExceptionModal} className="btn-secondary flex-1 text-amber-700">
-                EVV Exception
+                Visit Verification Exception
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* EVV Exception Modal */}
+      {/* Visit Verification Exception Modal */}
       {showEvvExceptionModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center" onClick={() => setShowEvvExceptionModal(false)}>
           <div className="absolute inset-0 bg-black/30" />
           <div className="relative bg-white rounded-xl shadow-xl max-w-sm w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-bold text-amber-700 mb-3">EVV Exception</h3>
-            <p className="text-xs text-slate-600 mb-3">Document the reason for the EVV exception. This will create an alert for review.</p>
-            <textarea className="input" rows={3} placeholder="Reason for EVV exception..." value={evvExceptionNote} onChange={e => setEvvExceptionNote(e.target.value)} />
+            <h3 className="text-sm font-bold text-amber-700 mb-3">Visit Verification Exception</h3>
+            <p className="text-xs text-slate-600 mb-3">Document the reason for the visit verification exception. This will create an alert for review.</p>
+            <textarea className="input" rows={3} placeholder="Reason for visit verification exception..." value={evvExceptionNote} onChange={e => setEvvExceptionNote(e.target.value)} />
             <div className="flex gap-2 mt-3">
               <button onClick={handleEvvException} className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-xs font-medium rounded-lg hover:bg-amber-700 flex-1">Submit Exception</button>
               <button onClick={() => { setShowEvvExceptionModal(false); setEvvExceptionNote(''); }} className="btn-secondary flex-1">Cancel</button>

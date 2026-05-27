@@ -109,7 +109,7 @@ function NotificationCenter({ onClose }: { onClose: () => void }) {
       <div className="relative w-full max-w-md bg-white shadow-xl overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="sticky top-0 bg-white border-b border-advisa-border px-5 py-4 flex items-center justify-between z-10">
           <div>
-            <h3 className="text-sm font-bold text-slate-800">Notification Center</h3>
+            <h3 className="text-sm font-bold text-slate-800">Operations Alerts</h3>
             <p className="text-[11px] text-slate-400 mt-0.5">{unacknowledgedCount} unacknowledged · {activeAlerts.length} active</p>
           </div>
           <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-500" /></button>
@@ -139,7 +139,7 @@ function NotificationCenter({ onClose }: { onClose: () => void }) {
                           onClick={() => handleViewSource(alert)}
                           className="inline-flex items-center gap-1 px-2 py-1 bg-white/60 hover:bg-white rounded border border-current/10 text-[10px] font-medium"
                         >
-                          <Eye size={10} />View Source
+                          <Eye size={10} />View Related Item
                         </button>
                         {!alert.acknowledged && (
                           <button
@@ -391,7 +391,7 @@ function AppContent() {
               <div className="hidden md:flex items-center gap-2 text-[11px] text-clinical-muted font-medium">
                 <span className="live-dot live-dot-sm" />
                 <strong className="text-clinical-text font-semibold">Live</strong>
-                <span>· reconciled {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                <span>· updated {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
               </div>
               {unacknowledgedCount > 0 && (
                 <>
