@@ -208,7 +208,7 @@ export default function Quality() {
           <p className="stat-label">Resolved</p><p className="stat-value text-emerald-600">{counts.resolved}</p>
         </div>
         <div className="stat-card" data-testid="qao-card">
-          <p className="stat-label">Demo OASIS Quality Score</p>
+          <p className="stat-label">OASIS Quality Watch</p>
           <p
             className={`stat-value ${qaoScore !== null && qaoScore >= 80 ? 'text-emerald-600' : 'text-amber-600'}`}
             data-testid="qao-percentage"
