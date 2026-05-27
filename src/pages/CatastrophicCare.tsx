@@ -200,28 +200,46 @@ export default function CatastrophicCare() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Cases List */}
           <div className="space-y-3">
-            {state.catastrophicCases.map(cc => (
-              <div
-                key={cc.id}
-                id={`case-${cc.id}`}
-                className={`card cursor-pointer transition-all ${selectedCaseId === cc.id ? 'ring-2 ring-red-400' : 'hover:shadow-card-hover'}`}
-                onClick={() => setSelectedCaseId(cc.id)}
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-bold text-sm text-slate-800">{cc.patientInitials}</h3>
-                      <span className={`badge ${cc.acuityLevel === 'Critical' ? 'badge-urgent' : 'badge-warning'}`}>{cc.acuityLevel}</span>
-                    </div>
-                    <p className="text-xs text-slate-500">{cc.caseManagerName}</p>
+            {state.catastrophicCases.map(cc => {
+              // Map coverage/supplies status to single-signal pill tones
+              const covTone = cc.coverageStatus === 'Fully Covered' ? 'pill-success'
+                            : cc.coverageStatus === 'Partially Covered' ? 'pill-warning'
+                            : 'pill-critical';
+              const supTone = cc.suppliesStatus === 'Adequate' ? 'pill-success'
+                            : cc.suppliesStatus === 'Low' ? 'pill-warning'
+                            : 'pill-critical';
+              return (
+                <div
+                  key={cc.id}
+                  id={`case-${cc.id}`}
+                  className={`card cursor-pointer transition-all ${selectedCaseId === cc.id ? 'ring-2 ring-red-400' : 'hover:shadow-card-hover'}`}
+                  onClick={() => setSelectedCaseId(cc.id)}
+                >
+                  {/* Header — patient + acuity pill wraps cleanly on mobile */}
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <h3 className="font-bold text-sm text-clinical-text">{cc.patientInitials}</h3>
+                    <span className={`pill ${cc.acuityLevel === 'Critical' ? 'pill-critical' : 'pill-warning'} text-[10px]`}>
+                      <span className="pill-dot" />
+                      {cc.acuityLevel}
+                    </span>
                   </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <span className={`badge ${coverageBadge(cc.coverageStatus)}`}>{cc.coverageStatus}</span>
-                    <span className={`badge ${suppliesBadge(cc.suppliesStatus)}`}>Supplies: {cc.suppliesStatus}</span>
+                  <p className="text-xs text-clinical-muted mb-3">{cc.caseManagerName}</p>
+
+                  {/* Coverage + Supplies — single-signal pills on their own row,
+                      flex-wrap so they stack on narrow screens instead of overlapping */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`pill ${covTone} text-[10px]`}>
+                      <span className="pill-dot" />
+                      {cc.coverageStatus}
+                    </span>
+                    <span className={`pill ${supTone} text-[10px]`}>
+                      <span className="pill-dot" />
+                      Supplies · {cc.suppliesStatus}
+                    </span>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Case Detail */}
