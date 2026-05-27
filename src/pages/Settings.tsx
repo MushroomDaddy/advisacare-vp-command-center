@@ -1,7 +1,10 @@
 import { useAppState } from '../context/AppContext';
 import { useToast } from '../components/Toast';
 import type { UserRole } from '../types';
+import { getDemoAnchor } from '../lib/dateUtils';
 import { useState, useRef } from 'react';
+
+const demoAnchor = getDemoAnchor();
 import {
   Settings, User, Shield, Database, Download, Upload, RotateCcw,
   CheckCircle, Clock, AlertTriangle, Lock,
@@ -105,6 +108,17 @@ export default function SettingsPage() {
       {/* Demo Data Management */}
       <div className="card mb-5">
         <div className="card-header"><Database size={16} className="text-advisa-accent" />Demo Data Management</div>
+        <div className="mb-4 p-3 rounded-lg border border-advisa-border-light bg-advisa-lime-soft/50 flex items-start gap-3">
+          <span className="live-dot live-dot-sm mt-1.5 flex-shrink-0" />
+          <div className="min-w-0">
+            <p className="text-[10.5px] font-mono uppercase tracking-[0.14em] text-clinical-muted">Demo Today</p>
+            <p className="text-sm font-semibold text-advisa-secondary mt-0.5">{demoAnchor.pretty}</p>
+            <p className="text-[10.5px] text-clinical-muted mt-0.5">
+              All seed dates are computed relative to this anchor. Reopen the demo tomorrow and "expires today"
+              still means today — the data refreshes itself.
+            </p>
+          </div>
+        </div>
         <p className="text-xs text-slate-500 mb-4">Manage your demo state. Data persists in localStorage. Seed data only resets when you explicitly reset.</p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

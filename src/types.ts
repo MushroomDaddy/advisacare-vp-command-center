@@ -21,11 +21,30 @@ export interface AuditEntry {
   after?: string;
 }
 
-export type RecordType = 'Referral' | 'Staff' | 'Compliance' | 'Visit' | 'Quality' | 'Partner' | 'Shift' | 'Document' | 'Alert' | 'System';
+/** Areas of the app a record can belong to. Used by audit log and View
+ *  Related Item routing. Expanded to align with real-world usage:
+ *  CatastrophicCase is now a first-class record type. */
+export type RecordType =
+  | 'Referral'
+  | 'Staff'
+  | 'Compliance'
+  | 'Visit'
+  | 'Quality'
+  | 'Partner'
+  | 'Shift'
+  | 'Document'
+  | 'CatastrophicCase'
+  | 'Alert'
+  | 'System';
 
 // --- Alerts ---
 export type AlertSeverity = 'Critical' | 'High' | 'Medium' | 'Low';
 
+/** Every alert type the engine can emit or a workflow can create.
+ *  Aligned with real usage including the renamed Visit Verification
+ *  Exception and the field-staff Escalation flow. The legacy
+ *  'EVV Exception' string is preserved so any old persisted alerts
+ *  still type-check during the migration window. */
 export type AlertType =
   | 'Expired Credential'
   | 'Critical Soon Credential'
@@ -34,7 +53,9 @@ export type AlertType =
   | 'SLA Breach'
   | 'Open Shift'
   | 'Catastrophic Uncovered Shift'
-  | 'EVV Exception'
+  | 'Visit Verification Exception'
+  | 'EVV Exception'           // legacy — superseded by Visit Verification Exception
+  | 'Escalation'
   | 'OASIS Rejected'
   | 'HOPE Overdue'
   | 'Partner Follow-up Overdue'

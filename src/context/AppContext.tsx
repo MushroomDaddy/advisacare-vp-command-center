@@ -152,17 +152,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const resolveAlert = useCallback((id: string) => {
-    setState(prev => ({
-      ...prev,
-      alerts: prev.alerts.map(a =>
-        a.id === id ? { ...a, resolved: true, resolvedAt: new Date().toISOString(), acknowledged: true } : a
-      ),
-    }));
-    // Fix #1: a manual resolve must not stick if the underlying problem still exists.
-    // Run reconciliation immediately after — reconcileAlerts will reactivate the alert
-    // if deriveAlerts still emits it.
-    setTimeout(reconcileNow, 50);
-  }, [reconcileNow]);
+    // Deterministic resolve+reconcile in a single state transition. No more
+    // setTimeout race — the resolve and the reconcile happen atomically so
+    // tests + UI see a consistent view. If the underlying problem still
+    // exists, reconcileAlerts immediately reactivates the alert (Fix #1).
+    setState(prev => {
+      const resolved = prev.alerts.map(a =>
+        a.id === id
+          ? { ...a, resolved: true, resolvedAt: new Date().toISOString(), acknowledged: true }
+          : a
+      );
+      const derived = deriveAlerts(prev);
+      return { ...prev, alerts: reconcileAlerts(resolved, derived) };
+    });
+  }, []);
 
   /** Run the alert engine: derive alerts from state, reconcile with existing */
   const runAlertEngine = useCallback(() => {
@@ -570,12 +573,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const importDemoData = useCallback((json: string): boolean => {
     try {
-      const parsed = JSON.parse(json) as AppState;
-      if (parsed.referrals && parsed.staff && parsed.alerts) {
-        setState(parsed);
-        return true;
+      const parsed: unknown = JSON.parse(json);
+
+      // Type guard: structural validation of the top-level shape. We do
+      // NOT recursively validate every nested record (would be brittle as
+      // the schema evolves) — but we DO confirm every required collection
+      // is a real array of objects, plus a currentUser object. A bad
+      // import returns false instead of nuking state.
+      if (!parsed || typeof parsed !== 'object') return false;
+      const p = parsed as Record<string, unknown>;
+
+      const requiredArrays: Array<keyof AppState> = [
+        'referrals', 'staff', 'compliance', 'shifts', 'visits',
+        'quality', 'partners', 'auditLog', 'alerts', 'documents',
+        'offlineQueue', 'catastrophicCases', 'productionReadiness',
+      ];
+      for (const key of requiredArrays) {
+        const v = p[key];
+        if (!Array.isArray(v)) return false;
+        // Every item should at least be an object; reject primitive
+        // arrays that would crash downstream consumers.
+        if (v.length > 0 && (typeof v[0] !== 'object' || v[0] === null)) return false;
       }
-      return false;
+
+      // currentUser must be an object with name + role strings.
+      const cu = p.currentUser;
+      if (!cu || typeof cu !== 'object') return false;
+      const cuRec = cu as Record<string, unknown>;
+      if (typeof cuRec.name !== 'string' || typeof cuRec.role !== 'string') return false;
+
+      // Shape is plausible — accept the import.
+      setState(parsed as AppState);
+      return true;
     } catch {
       return false;
     }

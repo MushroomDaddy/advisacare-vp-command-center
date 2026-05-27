@@ -1,5 +1,6 @@
 import { useAppState } from '../context/AppContext';
 import { useToast } from '../components/Toast';
+import PremiumEmptyState from '../components/PremiumEmptyState';
 import type { Referral, ReferralStage, DemoDocument } from '../types';
 import { REQUIRED_DOCUMENTS } from '../types';
 import { useState, useMemo, useCallback, useEffect } from 'react';
@@ -315,6 +316,16 @@ export default function Referrals() {
                 </tr>
               </thead>
               <tbody>
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-0">
+                      <PremiumEmptyState
+                        title="All referrals on track"
+                        body="No referrals match the current filter. Clear the filter to see the full pipeline, or open New Referral to record a fresh intake."
+                      />
+                    </td>
+                  </tr>
+                )}
                 {filtered.map((referral) => (
                   <tr
                     key={referral.id}
