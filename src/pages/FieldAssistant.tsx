@@ -239,7 +239,7 @@ export default function FieldAssistant() {
 
   return (
     <div>
-      <div className="mb-6 flex justify-between items-start">
+      <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-3">
         <div>
           <h2 className="page-title flex items-center gap-2">
             <Smartphone size={22} className="text-advisa-accent" />
@@ -247,7 +247,7 @@ export default function FieldAssistant() {
           </h2>
           <p className="text-xs text-slate-400 mt-1">{visibleVisits.length} visits today · {completedCount} documented</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {/* Offline toggle (demo) */}
           <button
             onClick={() => setIsOffline(!isOffline)}

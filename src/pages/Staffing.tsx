@@ -201,11 +201,11 @@ export default function Staffing() {
       </div>
 
       {/* Tab Toggle */}
-      <div className="flex gap-2 mb-5">
-        <button onClick={() => setActiveTab('staff')} className={`px-4 py-2 text-xs font-semibold rounded-lg ${activeTab === 'staff' ? 'bg-advisa-accent text-white' : 'bg-white border border-advisa-border text-slate-600 hover:bg-slate-50'}`}>
+      <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
+        <button onClick={() => setActiveTab('staff')} className={`px-4 py-2 text-xs font-semibold rounded-lg whitespace-nowrap flex-shrink-0 ${activeTab === 'staff' ? 'bg-advisa-accent text-white' : 'bg-white border border-advisa-border text-slate-600 hover:bg-slate-50'}`}>
           Staff Directory
         </button>
-        <button onClick={() => setActiveTab('shifts')} className={`px-4 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 ${activeTab === 'shifts' ? 'bg-advisa-accent text-white' : 'bg-white border border-advisa-border text-slate-600 hover:bg-slate-50'}`}>
+        <button onClick={() => setActiveTab('shifts')} className={`px-4 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${activeTab === 'shifts' ? 'bg-advisa-accent text-white' : 'bg-white border border-advisa-border text-slate-600 hover:bg-slate-50'}`}>
           Open Shift Board
           {openShiftCount > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0 rounded-full">{openShiftCount}</span>}
         </button>
@@ -224,7 +224,8 @@ export default function Staffing() {
           </div>
 
           <div className="card p-0 overflow-hidden mb-5">
-            <table className="w-full text-sm">
+            <div className="table-wrap">
+            <table className="w-full text-sm min-w-[700px]">
               <thead>
                 <tr>
                   <th className="table-head">Name</th>
@@ -274,6 +275,7 @@ export default function Staffing() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
 
           {selectedStaff && (() => {
@@ -283,7 +285,7 @@ export default function Staffing() {
             return (
               <div className="card mb-5 bg-sky-50/50 border-sky-200">
                 <p className="section-title mb-3">{staff.name} — Detail</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                   <div className="flex items-center gap-2"><Phone size={14} className="text-slate-400" /><div><p className="stat-label">Phone</p><p className="font-medium text-slate-700">{staff.phone}</p></div></div>
                   <div className="flex items-center gap-2"><MapPin size={14} className="text-slate-400" /><div><p className="stat-label">Location</p><p className="font-medium text-slate-700">{staff.location}</p></div></div>
                   <div><p className="stat-label">License Expiry</p><p className="font-medium text-slate-700">{staff.licenseExpiry}</p></div>
@@ -352,7 +354,7 @@ export default function Staffing() {
           {showCreateShift && (
             <div className="card mb-5 bg-sky-50/50 border-sky-200">
               <p className="section-title mb-3">Create New Shift</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <select className="select" value={newShiftReferral} onChange={e => setNewShiftReferral(e.target.value)}>
                   <option value="">Select Referral...</option>
                   {staffingReferrals.map(r => <option key={r.id} value={r.id}>{r.patientInitials} — {r.serviceType}</option>)}

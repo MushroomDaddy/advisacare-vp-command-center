@@ -236,7 +236,7 @@ export default function Referrals() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
         <div>
           <h2 className="page-title flex items-center gap-2">
             <ClipboardList size={22} className="text-advisa-accent" />
@@ -244,7 +244,7 @@ export default function Referrals() {
           </h2>
           <p className="text-xs text-slate-400 mt-1">{filtered.length} referrals · {state.referrals.filter(r => r.urgency === 'Immediate').length} immediate</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-shrink-0">
           <div className="flex border border-advisa-border rounded-lg overflow-hidden">
             <button onClick={() => setViewMode('table')} className={`px-3 py-1.5 text-xs font-medium ${viewMode === 'table' ? 'bg-advisa-accent text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
               <List size={14} />
@@ -253,7 +253,7 @@ export default function Referrals() {
               <LayoutGrid size={14} />
             </button>
           </div>
-          <button onClick={() => setShowNewForm(!showNewForm)} className="btn-primary"><Plus size={15} />New Referral</button>
+          <button onClick={() => setShowNewForm(!showNewForm)} className="btn-primary"><Plus size={15} /><span className="hidden sm:inline">New</span> Referral</button>
         </div>
       </div>
 
@@ -261,7 +261,7 @@ export default function Referrals() {
       {showNewForm && (
         <div className="card mb-5 bg-sky-50/50 border-sky-200">
           <p className="section-title mb-3">New Referral Form</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input placeholder="Patient Initials (e.g. J.D.) *" className="input" value={newPatientInitials} onChange={(e) => setNewPatientInitials(e.target.value)} />
             <select className="select" value={newServiceType} onChange={(e) => setNewServiceType(e.target.value as Referral['serviceType'])}>
               <option>Home Health</option><option>Hospice</option><option>Personal Care</option><option>Therapy</option><option>Catastrophic Injury Care</option>
@@ -302,7 +302,8 @@ export default function Referrals() {
       {viewMode === 'table' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2 card p-0 overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="table-wrap">
+            <table className="w-full text-sm min-w-[600px]">
               <thead>
                 <tr>
                   <th className="table-head">Patient</th>
@@ -347,6 +348,7 @@ export default function Referrals() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
 
           {/* Detail Drawer */}

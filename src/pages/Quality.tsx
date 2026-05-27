@@ -186,7 +186,7 @@ export default function Quality() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-6">
         <div>
           <h2 className="page-title flex items-center gap-2">
             <Star size={22} className="text-advisa-accent" />
@@ -229,12 +229,12 @@ export default function Quality() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex gap-2 mb-5">
+      <div className="flex gap-2 mb-5 overflow-x-auto pb-1 -mb-1" style={{ WebkitOverflowScrolling: 'touch' }}>
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => { setActiveTab(tab.id); setFilterType('All'); setFilterStatus('All'); }}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg transition-colors ${
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex-shrink-0 ${
               activeTab === tab.id
                 ? 'bg-advisa-accent text-white'
                 : 'bg-white border border-advisa-border text-slate-600 hover:bg-slate-50'
@@ -271,7 +271,8 @@ export default function Quality() {
 
       {/* Quality Items Table */}
       <div className="card p-0 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="table-wrap">
+        <table className="w-full text-sm min-w-[700px]">
           <thead>
             <tr>
               <th className="table-head">Type</th>
@@ -415,6 +416,7 @@ export default function Quality() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {tabItems.length === 0 && (

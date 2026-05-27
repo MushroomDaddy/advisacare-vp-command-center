@@ -142,7 +142,7 @@ export default function Compliance() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-6">
         <div>
           <h2 className="page-title flex items-center gap-2">
             <ShieldCheck size={22} className="text-advisa-accent" />
@@ -186,7 +186,8 @@ export default function Compliance() {
       </div>
 
       <div className="card p-0 overflow-hidden mb-5">
-        <table className="w-full text-sm">
+        <div className="table-wrap">
+        <table className="w-full text-sm min-w-[700px]">
           <thead>
             <tr>
               <th className="table-head">Staff Member</th>
@@ -237,6 +238,7 @@ export default function Compliance() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {selectedStaff && (() => {
@@ -331,7 +333,7 @@ export default function Compliance() {
         </div>
       )}
 
-      <div className="flex gap-5 mt-5 text-xs text-slate-500">
+      <div className="flex flex-wrap gap-3 sm:gap-5 mt-5 text-xs text-slate-500">
         <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />Compliant (&gt;90 days)</div>
         <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-600" />Due Soon (31–90 days)</div>
         <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-600" />Critical Soon (0–30 days)</div>
