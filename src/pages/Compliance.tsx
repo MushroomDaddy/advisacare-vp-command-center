@@ -185,7 +185,7 @@ export default function Compliance() {
         </select>
       </div>
 
-      <div className="card p-0 overflow-hidden mb-5">
+      <div className="card p-0 overflow-hidden mb-5 scroll-hint-right">
         <div className="table-wrap">
         <table className="w-full text-sm min-w-[700px]">
           <thead>

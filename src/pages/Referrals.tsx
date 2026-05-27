@@ -301,7 +301,7 @@ export default function Referrals() {
       {/* Table View */}
       {viewMode === 'table' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div className="lg:col-span-2 card p-0 overflow-hidden">
+          <div className="lg:col-span-2 card p-0 overflow-hidden scroll-hint-right">
             <div className="table-wrap">
             <table className="w-full text-sm min-w-[600px]">
               <thead>
