@@ -1,6 +1,6 @@
 import { useAppState } from '../context/AppContext';
 import { useToast } from '../components/Toast';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { hasBlockingCredential } from '../lib/complianceUtils';
 import {
@@ -14,6 +14,7 @@ export default function Staffing() {
   const [filterRole, setFilterRole] = useState('All');
   const [filterAvailability, setFilterAvailability] = useState('All');
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null);
+  const staffDetailRef = useRef<HTMLDivElement>(null);
   const [showCreateShift, setShowCreateShift] = useState(false);
   const [newShiftReferral, setNewShiftReferral] = useState('');
   const [newShiftDate, setNewShiftDate] = useState(new Date().toISOString().split('T')[0]);
@@ -32,6 +33,12 @@ export default function Staffing() {
       }, 200);
     }
   }, [deepLinkShift]);
+
+  useEffect(() => {
+    if (selectedStaff && staffDetailRef.current) {
+      staffDetailRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [selectedStaff]);
 
   const roles = ['All', 'RN', 'LPN', 'HHA', 'CNA', 'PT', 'OT', 'ST'];
   const availabilities = ['All', 'Available', 'Partially', 'Unavailable'];
@@ -283,7 +290,7 @@ export default function Staffing() {
             if (!staff) return null;
             const expired = hasExpiredCredentials(staff.id);
             return (
-              <div className="card mb-5 bg-sky-50/50 border-sky-200">
+              <div ref={staffDetailRef} className="card mb-5 bg-sky-50/50 border-sky-200">
                 <p className="section-title mb-3">{staff.name} — Detail</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                   <div className="flex items-center gap-2"><Phone size={14} className="text-slate-400" /><div><p className="stat-label">Phone</p><p className="font-medium text-slate-700">{staff.phone}</p></div></div>

@@ -4,7 +4,7 @@ import type { ReferralPartner } from '../types';
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Handshake, Plus, Calendar, TrendingUp, TrendingDown, AlertTriangle,
+  Handshake, Plus, Calendar, TrendingUp, TrendingDown,
   X, Phone, Mail,
 } from 'lucide-react';
 
