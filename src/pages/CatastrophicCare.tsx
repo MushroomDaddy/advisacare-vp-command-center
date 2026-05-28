@@ -1,13 +1,65 @@
 import { useAppState } from '../context/AppContext';
 import { useToast } from '../components/Toast';
-import type { CatastrophicCase, ReferralStage } from '../types';
+import type { CatastrophicCase, ReferralStage, Shift } from '../types';
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { hasBlockingCredential } from '../lib/complianceUtils';
 import {
   HeartPulse, AlertTriangle, Phone, Users, Wrench,
-  Plus, FileText, Clock, Shield, ChevronRight,
+  Plus, FileText, Clock, Shield, ChevronRight, Sun, Sunset, Moon, CalendarDays,
 } from 'lucide-react';
+
+// ─── 24-Hour Coverage Board helpers ─────────────────────────────────────
+//
+// Classify each catastrophic-care shift into one of four coverage slots
+// based on its time string ('HH:MM-HH:MM') and date. Weekend shifts
+// (Sat/Sun) bucket separately from weekday Day/Evening/Overnight so the
+// board reads "what's covered THIS WEEK" at a glance.
+
+type CoverageSlot = 'day' | 'evening' | 'overnight' | 'weekend';
+
+function slotForShift(shift: Shift): CoverageSlot {
+  // Weekend wins — any Sat/Sun shift goes into the weekend bucket
+  const date = new Date(shift.date);
+  const dow = date.getDay(); // 0 = Sun, 6 = Sat
+  if (dow === 0 || dow === 6) return 'weekend';
+
+  // Parse start hour from "HH:MM-HH:MM" time string. If missing, assume Day.
+  const startHourStr = shift.time?.split(':')[0];
+  const startHour = startHourStr ? parseInt(startHourStr, 10) : 8;
+  if (Number.isNaN(startHour)) return 'day';
+  if (startHour >= 6 && startHour < 14) return 'day';
+  if (startHour >= 14 && startHour < 22) return 'evening';
+  return 'overnight';
+}
+
+interface SlotCount {
+  total: number;
+  open: number;
+  accepted: number;
+}
+
+const EMPTY_SLOT: SlotCount = { total: 0, open: 0, accepted: 0 };
+
+function countByStatus(shifts: Shift[]): SlotCount {
+  const open = shifts.filter(s => s.status === 'Open').length;
+  const accepted = shifts.filter(s => s.status === 'Accepted').length;
+  return { total: shifts.length, open, accepted };
+}
+
+const SLOT_LABEL: Record<CoverageSlot, string> = {
+  day: 'Day · 06–14',
+  evening: 'Evening · 14–22',
+  overnight: 'Overnight · 22–06',
+  weekend: 'Weekend · Sat–Sun',
+};
+
+const SLOT_ICON: Record<CoverageSlot, typeof Sun> = {
+  day: Sun,
+  evening: Sunset,
+  overnight: Moon,
+  weekend: CalendarDays,
+};
 
 export default function CatastrophicCare() {
   const {
@@ -197,7 +249,16 @@ export default function CatastrophicCare() {
           <p className="text-sm text-slate-500">No catastrophic care cases</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <>
+          {/* ─── 24-Hour Coverage Board ─────────────────────────────── */}
+          <CoverageBoard
+            cases={state.catastrophicCases}
+            allShifts={state.shifts}
+            onSelectCase={setSelectedCaseId}
+            selectedCaseId={selectedCaseId}
+          />
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-5">
           {/* Cases List */}
           <div className="space-y-3">
             {state.catastrophicCases.map(cc => {
@@ -384,6 +445,7 @@ export default function CatastrophicCare() {
             )}
           </div>
         </div>
+        </>
       )}
 
       {/* Assign Staff Modal */}
@@ -418,5 +480,123 @@ export default function CatastrophicCare() {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── CoverageBoard — 24-hour staffing coverage at a glance ─────────────
+//
+// One row per active catastrophic case. Four cells: Day · Evening ·
+// Overnight · Weekend. Each cell shows: total shifts in that bucket and
+// how many are open (uncovered) vs accepted (covered). Tone rail on the
+// row mirrors the case's overall coverage status.
+function CoverageBoard({
+  cases,
+  allShifts,
+  selectedCaseId,
+  onSelectCase,
+}: {
+  cases: CatastrophicCase[];
+  allShifts: Shift[];
+  selectedCaseId: string | null;
+  onSelectCase: (id: string) => void;
+}) {
+  // Aggregate per-case slot counts up front
+  const rows = useMemo(() => cases.map(cc => {
+    const caseShifts = allShifts.filter(s => cc.shifts.includes(s.id));
+    const byslot: Record<CoverageSlot, Shift[]> = {
+      day: [], evening: [], overnight: [], weekend: [],
+    };
+    for (const s of caseShifts) byslot[slotForShift(s)].push(s);
+    return {
+      case: cc,
+      slots: {
+        day: countByStatus(byslot.day),
+        evening: countByStatus(byslot.evening),
+        overnight: countByStatus(byslot.overnight),
+        weekend: countByStatus(byslot.weekend),
+      } as Record<CoverageSlot, SlotCount>,
+      totalOpen: caseShifts.filter(s => s.status === 'Open').length,
+    };
+  }), [cases, allShifts]);
+
+  return (
+    <div className="card overflow-x-auto" aria-label="24-hour catastrophic coverage board">
+      <div className="card-header flex items-center justify-between">
+        <span className="flex items-center gap-2">
+          <Clock size={16} />
+          24-Hour Coverage Board
+        </span>
+        <span className="font-mono text-[10px] uppercase tracking-wider text-clinical-muted">
+          Day · Evening · Overnight · Weekend
+        </span>
+      </div>
+      <div className="min-w-[640px]">
+        {/* Column headers */}
+        <div className="grid grid-cols-[1.4fr_repeat(4,1fr)] gap-2 pb-2 mb-2 border-b border-advisa-border">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-clinical-muted">Case</span>
+          {(['day','evening','overnight','weekend'] as CoverageSlot[]).map(slot => {
+            const Icon = SLOT_ICON[slot];
+            return (
+              <span key={slot} className="text-[10px] font-mono uppercase tracking-wider text-clinical-muted flex items-center gap-1">
+                <Icon size={11} aria-hidden />
+                {SLOT_LABEL[slot]}
+              </span>
+            );
+          })}
+        </div>
+
+        {/* Rows */}
+        <div className="space-y-2">
+          {rows.map(({ case: cc, slots, totalOpen }) => {
+            const rowTone =
+              cc.coverageStatus === 'Fully Covered' ? 'border-l-[#9BB83F]'
+              : cc.coverageStatus === 'Partially Covered' ? 'border-l-[#D97706]'
+              : 'border-l-[#DC2626]';
+            return (
+              <button
+                key={cc.id}
+                onClick={() => onSelectCase(cc.id)}
+                className={`w-full grid grid-cols-[1.4fr_repeat(4,1fr)] gap-2 items-center text-left p-2 rounded-md border border-advisa-border-light hover:bg-advisa-lime-soft/40 transition-colors border-l-[3px] ${rowTone} ${selectedCaseId === cc.id ? 'ring-2 ring-advisa-primary/40' : ''}`}
+                aria-label={`Coverage board row for ${cc.patientInitials}, ${totalOpen} uncovered shift${totalOpen === 1 ? '' : 's'}`}
+              >
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold text-advisa-secondary truncate">{cc.patientInitials}</p>
+                  <p className="text-[10.5px] text-clinical-muted truncate">{cc.acuityLevel} · {cc.caseManagerName}</p>
+                </div>
+                {(['day','evening','overnight','weekend'] as CoverageSlot[]).map(slot => (
+                  <SlotCell key={slot} count={slots[slot] ?? EMPTY_SLOT} />
+                ))}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Single coverage cell — shows total / open / accepted as a tiny tile. */
+function SlotCell({ count }: { count: SlotCount }) {
+  if (count.total === 0) {
+    return (
+      <span className="inline-flex items-center justify-center text-[10px] font-mono text-clinical-faint h-9 px-2 rounded-md bg-advisa-surface border border-dashed border-advisa-border">
+        —
+      </span>
+    );
+  }
+  // Tone driven by whether anything is uncovered
+  const tone =
+    count.open > 0 && count.accepted === 0 ? 'pill-critical'
+    : count.open > 0 ? 'pill-warning'
+    : 'pill-success';
+  return (
+    <span className={`inline-flex items-center justify-center gap-1.5 h-9 px-2 rounded-md text-[10.5px] font-semibold tabular-nums ${
+      tone === 'pill-critical' ? 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-200'
+      : tone === 'pill-warning' ? 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200'
+      : 'bg-advisa-lime-soft text-[#4F6A1A] ring-1 ring-inset ring-[rgba(155,184,63,.45)]'
+    }`}>
+      <span className="font-mono">{count.accepted}/{count.total}</span>
+      {count.open > 0 && <span className="text-[9px] uppercase tracking-wider">{count.open} open</span>}
+    </span>
   );
 }

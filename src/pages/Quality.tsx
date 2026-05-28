@@ -190,10 +190,45 @@ export default function Quality() {
         <div>
           <h2 className="page-title flex items-center gap-2">
             <Star size={22} className="text-advisa-accent" />
-            Quality & Outcome Tracking
+            Quality &amp; Outcome Tracking
           </h2>
-          <p className="text-xs text-slate-400 mt-1">{counts.total} items · {counts.open} open · QAO: {qaoScore !== null ? `${qaoScore}%` : 'N/A'}</p>
+          <p className="text-xs text-clinical-muted mt-1">
+            {counts.total} items · <span className="font-semibold text-red-600">{counts.open}</span> open ·
+            OASIS Quality Watch <span className="font-semibold text-advisa-secondary">{qaoCounts.percentage !== null ? `${qaoCounts.percentage}%` : qaoScore !== null ? `${qaoScore}%` : 'N/A'}</span>
+          </p>
         </div>
+      </div>
+
+      {/* ─── Watchboard — executive cards above the table ─────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <WatchCard
+          label="OASIS Rejected"
+          value={state.quality.filter(q => (q.type === 'OASIS Due' || q.type === 'OASIS Review') && q.status === 'Rejected').length}
+          tone="critical"
+          foot="Need rework"
+          onClick={() => { setActiveTab('oasis'); setFilterStatus('Rejected'); }}
+        />
+        <WatchCard
+          label="OASIS Pending Review"
+          value={state.quality.filter(q => (q.type === 'OASIS Due' || q.type === 'OASIS Review') && (q.status === 'Submitted' || q.status === 'In Progress')).length}
+          tone="warning"
+          foot="Awaiting QA"
+          onClick={() => { setActiveTab('oasis'); setFilterStatus('Submitted'); }}
+        />
+        <WatchCard
+          label="HOPE Overdue"
+          value={counts.hopeOverdue}
+          tone={counts.hopeOverdue > 0 ? 'critical' : 'success'}
+          foot="Past due date"
+          onClick={() => { setActiveTab('hope'); setFilterStatus('Open'); }}
+        />
+        <WatchCard
+          label="CAHPS Pending"
+          value={state.quality.filter(q => q.type === 'CAHPS Follow-up' && q.status !== 'Resolved').length}
+          tone="warning"
+          foot="Survey + follow-up"
+          onClick={() => { setActiveTab('cahps'); }}
+        />
       </div>
 
       {/* Stats */}
@@ -423,5 +458,53 @@ export default function Quality() {
         <div className="text-center py-12 text-slate-400 text-sm">No quality items match your filters</div>
       )}
     </div>
+  );
+}
+
+// ─── WatchCard — executive watchboard tile ─────────────────────────────
+//
+// Card-first replacement for the dense table-row pattern. Each tile owns
+// a single metric, a tone-coloured rail, and an entry click that filters
+// the table below. Reads "watchboard", not "spreadsheet".
+function WatchCard({
+  label, value, tone, foot, onClick,
+}: {
+  label: string;
+  value: number | string;
+  tone: 'critical' | 'warning' | 'success' | 'neutral';
+  foot?: string;
+  onClick?: () => void;
+}) {
+  const rail =
+    tone === 'critical' ? '#DC2626'
+    : tone === 'warning'  ? '#D97706'
+    : tone === 'success'  ? '#9BB83F'
+    : '#0B6F72';
+  const valueColor =
+    tone === 'critical' ? 'text-red-600'
+    : tone === 'warning'  ? 'text-amber-600'
+    : tone === 'success'  ? 'text-[#4F6A1A]'
+    : 'text-advisa-secondary';
+  return (
+    <button
+      onClick={onClick}
+      className="text-left rounded-card border border-advisa-border bg-card-surface p-4 transition-all hover:-translate-y-0.5 hover:shadow-card-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-advisa-primary relative overflow-hidden"
+      style={{
+        background: 'linear-gradient(180deg, #FFFFFF 0%, #FBFCFC 100%)',
+        boxShadow: `0 1px 2px rgba(15,47,51,.04), 0 1px 3px rgba(6,73,79,.06), inset 3px 0 0 ${rail}`,
+      }}
+      aria-label={`${label}: ${value}`}
+    >
+      <span
+        aria-hidden
+        className="absolute pointer-events-none"
+        style={{ top: 0, left: 12, right: 12, height: 1, background: 'linear-gradient(90deg, transparent, rgba(155,184,63,.30), transparent)' }}
+      />
+      <p className="font-mono text-[10px] font-semibold tracking-[0.14em] uppercase text-clinical-muted">{label}</p>
+      <p className={`mt-1 text-3xl font-bold tabular-nums leading-none ${valueColor}`} style={{ letterSpacing: '-0.025em' }}>
+        {value}
+      </p>
+      {foot && <p className="mt-2 text-[10.5px] text-clinical-muted">{foot}</p>}
+    </button>
   );
 }
