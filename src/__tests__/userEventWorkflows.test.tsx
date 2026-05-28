@@ -20,7 +20,7 @@
  *    AppProvider so state is real, and the ToastProvider so toast actions
  *    don't blow up.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -38,6 +38,8 @@ import ReferralPartners from '../pages/ReferralPartners';
 
 beforeEach(() => {
   localStorage.clear();
+  // jsdom doesn't implement scrollIntoView
+  Element.prototype.scrollIntoView = vi.fn();
 });
 
 /** Render a page inside the full provider stack at a given route. */
@@ -105,7 +107,8 @@ describe('userEvent · 2. Upload final document changes readiness', () => {
 
     // The detail drawer should be visible for J.D. (id=1)
     await waitFor(() => {
-      expect(screen.getByText('Patient')).toBeInTheDocument();
+      // Multiple "Patient" labels exist (table header + detail panel)
+      expect(screen.getAllByText('Patient').length).toBeGreaterThanOrEqual(1);
     });
 
     // Click each "Upload (Demo)" button in the Missing Items list
@@ -183,18 +186,18 @@ describe('userEvent · 4. Offer/accept shift creates a visit and resolves the al
       '/staffing'
     );
 
-    // Switch to the Open Shift Board tab
-    const boardTab = await screen.findByRole('button', { name: /Open Shift Board/i });
-    await user.click(boardTab);
-
-    // Find the first "Offer" button (status: Open shifts)
+    // The "Offer" buttons live in the Staff Directory tab's "Best Staff
+    // Matches for Open Shifts" section (not the Open Shift Board tab).
     const offerBtns = await screen.findAllByRole('button', { name: /^Offer$/i });
     expect(offerBtns.length).toBeGreaterThan(0);
     await user.click(offerBtns[0]);
 
-    // After offering, an "Accept" button should appear (offered to first
-    // matched staff member). Accept it.
-    const acceptBtns = await screen.findAllByRole('button', { name: /^Accept$/i });
+    // After offering, switch to the Open Shift Board tab where
+    // Offered shifts show Accept / Decline buttons.
+    const boardTab = await screen.findByRole('button', { name: /Open Shift Board/i });
+    await user.click(boardTab);
+
+    const acceptBtns = await screen.findAllByRole('button', { name: /Accept/i });
     expect(acceptBtns.length).toBeGreaterThan(0);
     await user.click(acceptBtns[0]);
 
@@ -282,9 +285,9 @@ describe('userEvent · 6. Partner follow-up clears the overdue alert', () => {
     await user.click(followUpBtns[0]);
 
     // The modal opens — type a brief note then submit
-    const textarea = await screen.findByPlaceholderText(/follow.?up note|notes/i);
+    const textarea = await screen.findByPlaceholderText(/what was discussed/i);
     await user.type(textarea, 'Quarterly check-in');
-    const submitBtn = await screen.findByRole('button', { name: /Save|Submit|Record/i });
+    const submitBtn = await screen.findByRole('button', { name: /Save Follow-up/i });
     await user.click(submitBtn);
 
     // Verify: that partner's lastFollowUp changed (i.e., the action ran)
