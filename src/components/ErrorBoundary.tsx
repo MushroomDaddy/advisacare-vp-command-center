@@ -30,8 +30,8 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: { componentStack?: string | null }) {
     // In a real product this would ship to Sentry / Datadog. The demo
-    // just logs to console.
-    // eslint-disable-next-line no-console
+    // logs via console.error (which is allowed by the project's ESLint
+    // config, so no disable directive needed).
     console.error('AdvisaCare command center — caught render error:', error, info);
     this.props.onError?.(error, { componentStack: info.componentStack });
   }

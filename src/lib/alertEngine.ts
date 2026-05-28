@@ -5,11 +5,11 @@
  * Auto-resolve: when the underlying issue no longer exists, the alert is resolved.
  * Auto-reactivate: when a manually-resolved alert's underlying issue still exists, it reactivates.
  */
-import type { AppState, Alert, AlertSeverity } from '../types';
+import type { AppState, Alert, AlertSeverity, AlertType } from '../types';
 import { getComplianceCategory, daysUntil } from './complianceUtils';
 
 interface DerivedAlert {
-  type: string;
+  type: AlertType;
   severity: AlertSeverity;
   message: string;
   sourceRecordType: Alert['sourceRecordType'];

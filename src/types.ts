@@ -66,7 +66,9 @@ export type AlertType =
 
 export interface Alert {
   id: string;
-  type: string;
+  /** Discriminated against the AlertType union. Was `string` historically;
+   *  tightening now that every emit site uses one of the documented types. */
+  type: AlertType;
   severity: AlertSeverity;
   message: string;
   sourceRecordType: RecordType;

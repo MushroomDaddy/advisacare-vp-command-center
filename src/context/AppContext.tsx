@@ -213,7 +213,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return updated;
       }),
     }));
-    setTimeout(reconcileNow, 50);
+    reconcileNow();
   }, [reconcileNow]);
 
   const updateReferral = useCallback((id: string, updates: Partial<Referral>) => {
@@ -247,7 +247,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...prev,
       compliance: prev.compliance.map(c => c.id === id ? { ...c, ...updates } : c),
     }));
-    setTimeout(reconcileNow, 50);
+    reconcileNow();
   }, [reconcileNow]);
 
   // --- Visits ---
@@ -305,7 +305,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         };
       }),
     }));
-    setTimeout(reconcileNow, 50);
+    reconcileNow();
   }, [reconcileNow]);
 
   const updateVisit = useCallback((id: string, updates: Partial<FieldVisit>) => {
@@ -325,7 +325,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...prev,
       quality: prev.quality.map(q => q.id === id ? { ...q, status, ...(reviewNotes !== undefined ? { reviewNotes } : {}) } : q),
     }));
-    setTimeout(reconcileNow, 50);
+    reconcileNow();
   }, [reconcileNow]);
 
   const updateQualityItem = useCallback((id: string, updates: Partial<QualityItem>) => {
@@ -340,7 +340,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...prev,
       quality: [...prev.quality, { id: genId('q'), ...item }],
     }));
-    setTimeout(reconcileNow, 50);
+    reconcileNow();
   }, [reconcileNow]);
 
   // --- Partners ---
@@ -353,7 +353,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...prev,
       partners: prev.partners.map(p => p.id === id ? { ...p, ...updates } : p),
     }));
-    setTimeout(reconcileNow, 50);
+    reconcileNow();
   }, [reconcileNow]);
 
   // --- Shifts (createShift now returns the new ID) ---
@@ -380,7 +380,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         s.id === shiftId ? { ...s, status: 'Offered' as ShiftStatus, offeredTo: staffId, offeredToName: staffName } : s
       ),
     }));
-    setTimeout(reconcileNow, 50);
+    reconcileNow();
   }, [reconcileNow]);
 
   const acceptShift = useCallback((shiftId: string) => {
@@ -462,7 +462,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         alerts: updatedAlerts,
       };
     });
-    setTimeout(reconcileNow, 50);
+    reconcileNow();
   }, [reconcileNow]);
 
   const declineShift = useCallback((shiftId: string) => {
@@ -472,7 +472,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         s.id === shiftId ? { ...s, status: 'Open' as ShiftStatus, offeredTo: undefined, offeredToName: undefined } : s
       ),
     }));
-    setTimeout(reconcileNow, 50);
+    reconcileNow();
   }, [reconcileNow]);
 
   // --- Documents (comprehensive update on upload) ---
@@ -519,7 +519,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         referrals: newReferrals,
       };
     });
-    setTimeout(reconcileNow, 50);
+    reconcileNow();
   }, [reconcileNow]);
 
   // --- Catastrophic Care ---
@@ -528,7 +528,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...prev,
       catastrophicCases: prev.catastrophicCases.map(c => c.id === id ? { ...c, ...updates } : c),
     }));
-    setTimeout(reconcileNow, 50);
+    reconcileNow();
   }, [reconcileNow]);
 
   const addCatastrophicCase = useCallback((c: CatastrophicCase) => {

@@ -113,6 +113,16 @@ function NotificationCenter({ onClose }: { onClose: () => void }) {
     onClose();
   };
 
+  // Escape-to-close: a11y baseline. Modal/drawer overlays should dismiss
+  // on Esc so keyboard-only users have a way out.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   const severityColors: Record<string, string> = {
     Critical: 'bg-red-50 border-red-200 text-red-800',
     High: 'bg-amber-50 border-amber-200 text-amber-800',
