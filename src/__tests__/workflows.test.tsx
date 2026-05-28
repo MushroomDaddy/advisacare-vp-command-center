@@ -464,3 +464,97 @@ describe('Workflow — compliance renewal resolves credential alert', () => {
     expect(deriveAlerts(stateRenewed).some(d => d.type === 'Expired Credential')).toBe(false);
   });
 });
+
+// --- Hardened importDemoData (v6.3) ---------------------------------------
+//
+// The hardened importer now structurally validates the incoming JSON
+// before replacing state. A malformed import returns false; existing
+// state stays untouched.
+
+describe('importDemoData — structural validation (v6.3)', () => {
+  it('rejects non-JSON input without crashing', async () => {
+    const { AppProvider, useAppState } = await import('../context/AppContext');
+    let capturedImport: ((json: string) => boolean) | null = null;
+    function Capture() {
+      const { importDemoData } = useAppState();
+      capturedImport = importDemoData;
+      return null;
+    }
+    render(<AppProvider><Capture /></AppProvider>);
+    expect(capturedImport).not.toBeNull();
+    expect(capturedImport!('not valid json{')).toBe(false);
+    expect(capturedImport!('')).toBe(false);
+  });
+
+  it('rejects JSON missing required collections', async () => {
+    const { AppProvider, useAppState } = await import('../context/AppContext');
+    let capturedImport: ((json: string) => boolean) | null = null;
+    function Capture() {
+      const { importDemoData } = useAppState();
+      capturedImport = importDemoData;
+      return null;
+    }
+    render(<AppProvider><Capture /></AppProvider>);
+    // Missing 'compliance', 'shifts', 'visits', 'quality', etc.
+    const bogus = JSON.stringify({
+      referrals: [], staff: [], alerts: [],
+      currentUser: { name: 'X', role: 'VP' },
+    });
+    expect(capturedImport!(bogus)).toBe(false);
+  });
+
+  it('rejects JSON where a required collection is not an array', async () => {
+    const { AppProvider, useAppState } = await import('../context/AppContext');
+    let capturedImport: ((json: string) => boolean) | null = null;
+    function Capture() {
+      const { importDemoData } = useAppState();
+      capturedImport = importDemoData;
+      return null;
+    }
+    render(<AppProvider><Capture /></AppProvider>);
+    const required = ['referrals','staff','compliance','shifts','visits','quality',
+                      'partners','auditLog','alerts','documents','offlineQueue',
+                      'catastrophicCases','productionReadiness'];
+    const obj: Record<string, unknown> = { currentUser: { name: 'X', role: 'VP' } };
+    for (const k of required) obj[k] = [];
+    obj.alerts = 'not an array';
+    expect(capturedImport!(JSON.stringify(obj))).toBe(false);
+  });
+
+  it('rejects JSON where currentUser is missing or malformed', async () => {
+    const { AppProvider, useAppState } = await import('../context/AppContext');
+    let capturedImport: ((json: string) => boolean) | null = null;
+    function Capture() {
+      const { importDemoData } = useAppState();
+      capturedImport = importDemoData;
+      return null;
+    }
+    render(<AppProvider><Capture /></AppProvider>);
+    const required = ['referrals','staff','compliance','shifts','visits','quality',
+                      'partners','auditLog','alerts','documents','offlineQueue',
+                      'catastrophicCases','productionReadiness'];
+    const obj: Record<string, unknown> = {};
+    for (const k of required) obj[k] = [];
+    // No currentUser
+    expect(capturedImport!(JSON.stringify(obj))).toBe(false);
+    // currentUser without required string fields
+    expect(capturedImport!(JSON.stringify({ ...obj, currentUser: { name: 42, role: null } }))).toBe(false);
+  });
+
+  it('accepts a well-formed shape', async () => {
+    const { AppProvider, useAppState } = await import('../context/AppContext');
+    let capturedImport: ((json: string) => boolean) | null = null;
+    function Capture() {
+      const { importDemoData } = useAppState();
+      capturedImport = importDemoData;
+      return null;
+    }
+    render(<AppProvider><Capture /></AppProvider>);
+    const required = ['referrals','staff','compliance','shifts','visits','quality',
+                      'partners','auditLog','alerts','documents','offlineQueue',
+                      'catastrophicCases','productionReadiness'];
+    const obj: Record<string, unknown> = { currentUser: { name: 'Test VP', role: 'VP' } };
+    for (const k of required) obj[k] = [];
+    expect(capturedImport!(JSON.stringify(obj))).toBe(true);
+  });
+});
