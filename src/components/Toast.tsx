@@ -55,8 +55,12 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) =
     >
       {icons[toast.type]}
       <span className="flex-1 min-w-0">{toast.message}</span>
-      <button onClick={() => { setVisible(false); setTimeout(() => onRemove(toast.id), 300); }} className="text-slate-400 hover:text-slate-600 flex-shrink-0">
-        <X size={14} />
+      <button
+        onClick={() => { setVisible(false); setTimeout(() => onRemove(toast.id), 300); }}
+        className="text-slate-400 hover:text-slate-600 flex-shrink-0 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-advisa-primary"
+        aria-label="Dismiss notification"
+      >
+        <X size={14} aria-hidden />
       </button>
     </div>
   );

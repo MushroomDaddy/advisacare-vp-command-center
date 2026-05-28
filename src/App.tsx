@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AppProvider, useAppState } from './context/AppContext';
 import { ToastProvider, useToast } from './components/Toast';
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { lazy, Suspense, useState, useMemo, useCallback, useEffect } from 'react';
 import { allRoutes, canAccessRoute, getFirstAllowedRoute } from './lib/permissions';
 import { activeAlertCount } from './lib/alertEngine';
 import {
@@ -9,19 +9,40 @@ import {
   Star, Handshake, Settings, FileSearch, Bell, AlertTriangle,
   ChevronRight, Shield, Eye, Check, X, Menu, XCircle, HeartPulse, Lock,
 } from 'lucide-react';
+// Route-level code splitting: each page becomes its own chunk so the
+// initial bundle is smaller and the first paint is faster. Dashboard is
+// the landing page so it's loaded eagerly; the rest are lazy.
 import Dashboard from './pages/Dashboard';
-import Referrals from './pages/Referrals';
-import Staffing from './pages/Staffing';
-import Compliance from './pages/Compliance';
-import FieldAssistant from './pages/FieldAssistant';
-import Quality from './pages/Quality';
-import CatastrophicCare from './pages/CatastrophicCare';
-import ReferralPartners from './pages/ReferralPartners';
-import SettingsPage from './pages/Settings';
-import AuditLog from './pages/AuditLog';
-import SecurityChecklist from './pages/SecurityChecklist';
+const Referrals          = lazy(() => import('./pages/Referrals'));
+const Staffing           = lazy(() => import('./pages/Staffing'));
+const Compliance         = lazy(() => import('./pages/Compliance'));
+const FieldAssistant     = lazy(() => import('./pages/FieldAssistant'));
+const Quality            = lazy(() => import('./pages/Quality'));
+const CatastrophicCare   = lazy(() => import('./pages/CatastrophicCare'));
+const ReferralPartners   = lazy(() => import('./pages/ReferralPartners'));
+const SettingsPage       = lazy(() => import('./pages/Settings'));
+const AuditLog           = lazy(() => import('./pages/AuditLog'));
+const SecurityChecklist  = lazy(() => import('./pages/SecurityChecklist'));
 import { resolveAlertHref } from './lib/navigationUtils';
 import './index.css';
+
+/** Skeleton shown while a route chunk is loading. Calm, brand-correct,
+ *  short (chunks are usually <100ms). Pulse uses the lime keyframe so
+ *  it picks up the rest of the app's live language. */
+function RouteFallback() {
+  return (
+    <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
+      <div className="text-center">
+        <div
+          className="w-10 h-10 rounded-full mx-auto mb-3 animate-pulse-lime"
+          style={{ background: 'linear-gradient(135deg, #9BB83F, #7FA02D)' }}
+          aria-hidden
+        />
+        <p className="text-xs font-mono uppercase tracking-[0.18em] text-clinical-muted">Loading view…</p>
+      </div>
+    </div>
+  );
+}
 
 const routeComponents: Record<string, React.ComponentType> = {
   '/': Dashboard,
@@ -112,7 +133,13 @@ function NotificationCenter({ onClose }: { onClose: () => void }) {
             <h3 className="text-sm font-bold text-slate-800">Operations Alerts</h3>
             <p className="text-[11px] text-slate-400 mt-0.5">{unacknowledgedCount} unacknowledged · {activeAlerts.length} active</p>
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-500" /></button>
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-slate-100 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-advisa-primary"
+            aria-label="Close operations alerts"
+          >
+            <X size={16} className="text-slate-500" aria-hidden />
+          </button>
         </div>
 
         <div className="p-4 space-y-4">
@@ -434,21 +461,23 @@ function AppContent() {
           {/* Notification Center */}
           {showNotifications && <NotificationCenter onClose={() => setShowNotifications(false)} />}
 
-          {/* Page Content */}
+          {/* Page Content — lazy routes get a Suspense fallback */}
           <div className="p-4 md:p-8">
-            <Routes>
-              {allRoutes.map((route) => {
-                const Component = routeComponents[route.path];
-                if (!Component) return null;
-                return (
-                  <Route
-                    key={route.path}
-                    path={route.path}
-                    element={<ProtectedRoute path={route.path} element={<Component />} />}
-                  />
-                );
-              })}
-            </Routes>
+            <Suspense fallback={<RouteFallback />}>
+              <Routes>
+                {allRoutes.map((route) => {
+                  const Component = routeComponents[route.path];
+                  if (!Component) return null;
+                  return (
+                    <Route
+                      key={route.path}
+                      path={route.path}
+                      element={<ProtectedRoute path={route.path} element={<Component />} />}
+                    />
+                  );
+                })}
+              </Routes>
+            </Suspense>
           </div>
         </main>
       </div>
