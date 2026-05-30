@@ -244,7 +244,6 @@ export default function Dashboard() {
         className="relative rounded-card border border-advisa-border overflow-hidden mb-5"
         style={{
           background: 'linear-gradient(135deg, #06494F 0%, #04363B 60%, #032A2D 100%)',
-          boxShadow: '0 1px 2px rgba(15,47,51,.05), 0 12px 28px -10px rgba(6,73,79,.22)',
         }}
       >
         {/* Aurora overlays */}
@@ -253,7 +252,6 @@ export default function Dashboard() {
           className="absolute pointer-events-none"
           style={{
             top: -60, left: -30, width: 280, height: 200,
-            background: 'radial-gradient(ellipse, rgba(155,184,63,.12), transparent 70%)',
           }}
         />
         <span
@@ -261,7 +259,6 @@ export default function Dashboard() {
           className="absolute pointer-events-none"
           style={{
             bottom: -40, right: -20, width: 260, height: 180,
-            background: 'radial-gradient(ellipse, rgba(21,151,200,.10), transparent 70%)',
           }}
         />
         {/* Grain */}

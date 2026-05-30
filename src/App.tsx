@@ -13,16 +13,16 @@ import {
 // initial bundle is smaller and the first paint is faster. Dashboard is
 // the landing page so it's loaded eagerly; the rest are lazy.
 import Dashboard from './pages/Dashboard';
-const Referrals          = lazy(() => import('./pages/Referrals'));
-const Staffing           = lazy(() => import('./pages/Staffing'));
-const Compliance         = lazy(() => import('./pages/Compliance'));
-const FieldAssistant     = lazy(() => import('./pages/FieldAssistant'));
-const Quality            = lazy(() => import('./pages/Quality'));
-const CatastrophicCare   = lazy(() => import('./pages/CatastrophicCare'));
-const ReferralPartners   = lazy(() => import('./pages/ReferralPartners'));
-const SettingsPage       = lazy(() => import('./pages/Settings'));
-const AuditLog           = lazy(() => import('./pages/AuditLog'));
-const SecurityChecklist  = lazy(() => import('./pages/SecurityChecklist'));
+const Referrals = lazy(() => import('./pages/Referrals'));
+const Staffing = lazy(() => import('./pages/Staffing'));
+const Compliance = lazy(() => import('./pages/Compliance'));
+const FieldAssistant = lazy(() => import('./pages/FieldAssistant'));
+const Quality = lazy(() => import('./pages/Quality'));
+const CatastrophicCare = lazy(() => import('./pages/CatastrophicCare'));
+const ReferralPartners = lazy(() => import('./pages/ReferralPartners'));
+const SettingsPage = lazy(() => import('./pages/Settings'));
+const AuditLog = lazy(() => import('./pages/AuditLog'));
+const SecurityChecklist = lazy(() => import('./pages/SecurityChecklist'));
 import { resolveAlertHref } from './lib/navigationUtils';
 import './index.css';
 
@@ -257,7 +257,6 @@ function AppContent() {
             className="w-10 h-10 rounded-lg flex items-center justify-center text-white relative overflow-hidden"
             style={{
               background: 'linear-gradient(135deg, #ACCB4D 0%, #9BB83F 45%, #7FA02D 100%)',
-              boxShadow: '0 6px 14px -2px rgba(155,184,63,.45), inset 0 1px 0 rgba(255,255,255,.30), inset 0 -1px 0 rgba(0,0,0,.10)',
             }}
           >
             <Shield size={20} className="text-white relative z-10" />
